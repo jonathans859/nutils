@@ -1,0 +1,37 @@
+# NUtils configuration (sample). At runtime the live copy lives at
+# %APPDATA%\NUtils\config.toml and is created automatically on first run.
+#
+# Hotkey syntax: ^ = Ctrl, + = Shift, # = Win, ! = Alt; named keys in braces
+# like {f4}, {esc}. "bass" is the modifier prefix held with a digit 1..0 to
+# hide/unhide that slot. Reload and edit are on the tray menu, not hotkeys.
+
+rules = []
+managed_apps = []
+
+[hotkeys]
+bass = "^+"          # Ctrl+Shift+<digit> : hide/unhide window in that slot
+stackdown = "^+-"    # previous stack
+stackup = "^+="      # next stack
+chtitle = "#+t"      # change active window's title
+transparent = '#+\'  # make active window transparent (invisible)
+solid = "#+/"        # make active window solid again
+firstavailhide = "#+h"
+winls = "#+l"        # unhide-tree dialog
+winkill = "#{f4}"    # kill active window's process
+manageapp = "#+a"    # start auto-transparenting the active window's app
+unmanageapp = "#+s"  # stop auto-transparenting it (and make its windows solid again)
+
+[settings]
+stack_counter = true     # true: beep N times on stack N; false: use number sound pack
+feedback = "beeps"       # "beeps" | "text" | "both"  (text/both speak via NVDA, else SAPI)
+
+# --- WinMurderer: auto-close/kill windows on sight ---
+# [[rules]]
+# match = "title"   # "title" (substring) | "class" | "exe"
+# value = "Annoying Popup"
+# degree = "close"  # "close" (WM_CLOSE) | "kill" (terminate process)
+
+# --- Managed apps: new windows of these apps are auto-made transparent ---
+# [[managed_apps]]
+# match = "exe"          # "exe" | "title" | "class"
+# value = "wxdragon.exe"

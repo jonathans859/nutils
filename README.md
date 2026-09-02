@@ -1,119 +1,166 @@
-# NUtils Readme
+# NUtils
 
-NUtils is copyright© 2008-2010 Arbalon, Niko Carpenter, and Tyler Spivey.  
- Web site: [http://www.arbalon.com].
+NUtils is a hotkey-controlled window manager for Windows, built with screen-reader
+users in mind. It hides, reveals, and cloaks windows on a keystroke so you can keep
+many things open without them cluttering your taskbar, Alt-Tab order, or screen.
 
-## 1: Introduction
+Originally written in AutoIt (2008–2010) by **Niko Carpenter** and **Tyler Spivey**.
+Version 4 is a ground-up rewrite in **Rust** on the native Win32 API — a single
+self-contained ~0.5 MB executable with no runtime or redistributable dependency.
+The original sources are preserved under `legacy/`.
 
-### 1.1: What is NUtils?
+## Features
 
-NUtils is a hotkey-controled Window manager, to extend the functionality of Windows to increase productivity.
+- **Hide / unhide windows into 10 slots** with one keystroke (Ctrl+Shift+1…0).
+- **Stacks** — extra sets of 10 slots for when you need to hide more than ten
+  windows, or want to organize them; switch stacks with Ctrl+Shift+`=` / `-`.
+- **Make a window transparent** — invisible on screen but still fully interactable
+  through a screen reader (Win+Shift+`\`), and solid again (Win+Shift+`/`).
+- **Auto-transparent apps**: designate an application with **Win+Shift+A**; its
+  active window is made transparent at once and any new window or dialog it opens
+  is made transparent the instant it appears (with no flash). Stop it again with
+  **Win+Shift+S**, which also makes its windows solid. See
+  [Auto-transparent apps](#auto-transparent-apps).
+- **Kill the active window's process** (Win+F4) for unresponsive apps.
+- **Change a window's title** (Win+Shift+T) to tell same-named windows apart.
+- **Unhide tree dialog** (Win+Shift+L) listing every hidden window by stack.
+- **Set the active process's priority** (Ctrl+Shift+F3…F8: low → realtime).
+- **WinMurderer** — automatically close or kill windows matching a watch-list.
+- **Hidden state survives a restart** of NUtils (but not a reboot — handles are
+  meaningless after one, so they are discarded).
+- **Feedback your way** — beeps, spoken text, or both. Spoken text goes through
+  your **screen reader** when one is running (NVDA, via its controller client),
+  and falls back to built-in Windows SAPI otherwise — so you hear your own voice,
+  not a second one talking over it.
+- **Optional WAV sound packs** in place of the built-in PC-speaker beeps.
+- **Accessible settings editor** — rebind every shortcut in a native wxWidgets
+  dialog built for screen readers. See [Settings](#settings).
 
-### 1.2: Features
+## Installing
 
-Below is a summary of NUtil's feature set:
+Copy `nutils.exe` and its `lang\` folder into a folder of your choice and run it.
+NUtils lives in the system tray. To start it automatically, drop a shortcut to
+`nutils.exe` in your Startup folder (`shell:startup`).
 
-*   Show/hide up to 10 windows with one keystroke
-*   Create multiple "stacks" of windows--for those times when more than 10 windows need to be hidden). Switch between these stacks with a simple keystroke.
-*   Change the title of any window--to easily sort through windows whose titles are the same by default.
-*   Make a window transparent--to protect against nosy onlookers; to interact with the window, a screen reader must be used.
-*   Forcefully kill the current window for non-responding applications.
-*   Automatically close windows that exist in a list, or kill the process associated with them.
-*   Get a list of all hidden windows in an organized tree.
+## Usage
 
-### 1.3: Installing
+Default hotkeys (all configurable in `config.toml`):
 
-#### 1.3.1: Installing from the self-extracting archive
+| Action | Hotkey |
+|---|---|
+| Hide / unhide window in slot 1–10 | `Ctrl+Shift+1` … `Ctrl+Shift+0` |
+| Next / previous stack | `Ctrl+Shift+=` / `Ctrl+Shift+-` |
+| Hide in first free slot | `Win+Shift+H` |
+| Unhide tree dialog | `Win+Shift+L` |
+| Make transparent / solid | `Win+Shift+\` / `Win+Shift+/` |
+| Change active window title | `Win+Shift+T` |
+| Kill active window's process | `Win+F4` |
+| Process priority (low→realtime) | `Ctrl+Shift+F3` … `Ctrl+Shift+F8` |
+| Start auto-transparenting the active window's app | `Win+Shift+A` |
+| Stop auto-transparenting it (make it solid again) | `Win+Shift+S` |
 
-To install NUtils from the self-extracting archive, Run NUtils-portible.exe and extract NUtils in the desired location. A folder called NUtils will be created. To run NUtils, go into the newly created folder and run NUtils.exe.
+Slot `0` is the tenth slot, not slot zero. Pressing a slot's hotkey hides the
+active window there if the slot is empty, or brings that window back if occupied.
+You cannot unhide a window that is on a different stack without switching to it
+first. The desktop, taskbar, and Start menu cannot be hidden.
 
-#### 1.3.2: Installing NUtils with the installer
+The tray menu has a **Hidden** submenu listing every hidden window (grouped into
+per-stack submenus when they span several stacks); click one to unhide it.
+Configuration reloads automatically within about a second of `config.toml`
+changing — from the settings editor or a manual edit — so there is no reload item.
 
-To install NUtils using the installer, to get desktop and start menu shortcuts, run NUtils_Setup.exe and follow the instructions. To start NUtils, double click the NUtils shortcut that has been placed on your desktop, or in your start menu.
+Making a window transparent throws off screen readers that rely on display
+hooking, so there are limits to that feature. NUtils cannot act on windows running
+with higher privileges than itself.
 
-#### 1.3.3: Configuring NUtils to run at startup.
+## Auto-transparent apps
 
-To configure NUtils to run at startup, if using the installed copy, right click the shortcut to NUtils on your desktop and click copy. Next, right click the start button and click open all users, or just open if you only wish for NUtils to start up under your user account. Double click Programs, and then double click Startup. Right click a blank area in this folder and click paste. If you are using the portible copy, make sure that it is not on a removeable drive as NUtils will not start if this drive is not plugged in when the computer is started. In the NUtils folder, right click NUtils.exe and click create shortcut. A shortcut will be created in the same folder. Right click this shortcut and click cut. Next, right click the start button and click open all users, or just open if you only wish for NUtils to start up under your user account. Double click Programs, and then double click Startup. Right click a blank area in this folder and click paste.
+Mark an application so that **every new window it opens is instantly made
+transparent** — useful when an app is one you keep running "in the background" and
+never want to see on screen, even when it pops up a dialog.
 
-## 2: Using NUtils
+Press **Win+Shift+A** on any window of the app (or edit `config.toml`):
 
-Note: This readme asumes that you are using the default hotkey assignments. If you have changed any hotkeys in hotkeys.ini, you will have to make a note of that when accessing those functions.
+```toml
+[[managed_apps]]
+match = "exe"          # "exe" | "title" | "class"
+value = "wxdragon.exe" # case-insensitive
+```
 
-### 2.1: Hiding and unhiding windows using the number ro
+To stop, press **Win+Shift+S** on any window of that app: NUtils removes it from
+the list, stops the in-process helper, and makes its windows solid again.
 
-If there are several windows open, it can be useful to hide them, so that they aren't taking up room on your taskbar, or in your alt+tab order. This could be to hide a window that you wish to keep open but aren't really doing much with, such as a media player, or notepad with some notes that you wish to access later, or to hide a window so it can be easily recalled, like a document or web page.
+This works in two layers:
 
-To hide a window, place your focus into the window you wish to hide, either by clicking your mouse into it, clicking its icon on the taskbar, or alt+tabbing to it. Next, hold down control and shift, and press any number on the number row. To try this, go to any window and press control+shift+1\. Notice that the window you were in is no longer visible. Now, go ahead and do some things on your computer. Whenever you want to get that window back, just press control+shift+1 again, and the window will reappear.
+- A standard `SetWinEventHook` accessibility watcher running inside NUtils' own
+  process notices when a managed app's window appears and cloaks it. This alone
+  can let a window flash for a single frame if the app paints it the instant it is
+  shown.
+- To make hiding **flash-free**, NUtils then loads a tiny helper
+  (`nutils_hook.dll`) into the designated app — and *only* that app — using
+  `SetWindowsHookEx`, the same documented mechanism screen readers use. From
+  inside the app, each new window is made transparent before it is ever painted,
+  so nothing flashes. This is the *polite* form of injection (a hook DLL), **not**
+  the `CreateRemoteThread`/memory-writing kind malware uses, and it never touches
+  any program you haven't designated. If `nutils_hook.dll` isn't present, NUtils
+  falls back to the watcher above.
 
-In summary, if you remain on the same stack--stacks will be explained in the next section, pressing control+shift and any number will hide the active window, unless there is a window already hidden in that "slot," in which case that hidden window will be "unhidden" and will gain focus. Note that control+shift+0 is actually slot 10, not slot 0.
+## Settings
 
-At times, it is useful to be able to hide the active window without having to find a free slot to hide it in--sometimes, you don't care where a window is hidden; you just want it hidden. If you want to hide a window, but do not necessarily care which slot it goes into, press windows+shift+h, and NUtils will hide it in the first available slot. Note that the first available slot is calculated starting on your current stack, so if you're on stack 3 and you press windows+shift+h, NUtils will start searching at stack 3, slot 1, to find the first slot that is free. This may mean that your window will be hidden on the next stack, if the current stack is full.
+Open **Settings…** from the tray icon to launch the settings editor
+(`nutils-settings.exe`), a native wxWidgets dialog chosen for its excellent screen
+reader support. It has two tabs:
 
-### 2.2: Working with stacks
+- **General** — whether stacks are announced by beeping, and the **feedback
+  mode**: *Beeps*, *Spoken text*, or *Both*. Spoken text speaks through your screen
+  reader (NVDA) when it's running, and falls back to Windows SAPI otherwise (see
+  [docs/BUILDING.md](docs/BUILDING.md)).
+- **Keybindings** — a list of every shortcut ("action: binding"). Select one and
+  press **Set Shortcut…** (or Enter / double-click) to open a capture dialog:
+  a checkable **Modifiers** list (Ctrl, Shift, Windows, Alt), and a **Key** field
+  that detects the key you press — letters, digits, +, arrows, F-keys, and more.
+  Dialog keys like Tab, Enter, Escape and Space are intentionally *not* bindable. A
+  live region speaks the detected combination as you build it. The main tab also
+  has **Clear**, **Reset to Default**, and **Reset All**.
 
-If you want to work with more than ten windows, or you simply wish to be a little bit more organized with the way you hide your windows, you can create a new stack, giving you ten blank slots to hide windows in. A stack is a set of ten slots in which to hide and or unhide windows. By default, you are on stack 1\. To go to the next stack, press control+shift=. To go to the previous stack, press control+shift+-.
+Click **Save** and the running NUtils picks up the changes within about a second
+(it watches `config.toml` for changes) — no restart needed. The editor is a
+separate program, so wxWidgets is only loaded when you actually open settings; the
+always-running core stays a ~0.5 MB native process.
 
-A common use for stacks, other than for hiding more than ten windows, is to hide different types of applications on different stacks. For example, you might want to leave stack 1 open for things that you will frequently access like your media player, web pages, installations, etc. However, you have a bunch of Audio Repeaters open--Audio Repeater is a program used to pass audio from the input device of one soundcard and output it onto another sound card, and you wish to hide them. When you have five copies of Audio Repeater open, it is very handy to have them hidden, because you don't really need to do much with them besides leaving them open, but you don't want them in your way. However, you don't want them cluttering up your first stack, where you like to hide the windows that you actually need to do something with. So you switch to stack 2, hide your Audio Repeaters, and then switch back to stack 1.
+## Configuration
 
-Just be aware that you cannot unhide a window that is on a different stack by pressing control+shift+its number; you will first need to switch back to that stack and then unhide it. By default, NUtils will inform you of what stack you are on when you switch to it by beeping x number of times, where x is the stack you've switched to. For example, when switching to stack 2, NUtils will beep twice. This behavior can be changed by editing settings.ini, and under the settings section, changing StackCounter=1 to StackCounter=0\. With this set, NUtills will use a number pack to announce which stack you are switching to. By default, NUtils comes with the DTMF number pack, but other number packs can be found on the download page for NUtils.
+Configuration is a single `config.toml` at `%APPDATA%\NUtils\config.toml`, created
+with defaults on first run. If legacy `hotkeys.ini` / `settings.ini` /
+`WinMurderer.ini` files are found next to the executable on first run, they are
+migrated automatically. See the sample [`config.toml`](config.toml) for every
+option, including hotkey syntax, the WinMurderer `[[rules]]` list, and
+`[[managed_apps]]`.
 
-### 2.3: Hidden Window List
+## Building
 
-NUtils provides a list of all hidden windows, organized in a tree structure. Press windows+shift+l to recall this list. Hidden windows are organized by stack. To unhide a window, click the window you wish to unhide, and then click the unhide button in the lower left-hand corner of the dialog. You will notice that NUtils will automatically give focus to the last window you hid, so an easy way to unhide the last hidden window is to press windows+shift+l and when the list comes up, press enter. A history of all of your hidden windows is kept, so you could for example, press windows+shift+h to hide several windows, and then press windows+shift+l, then enter, and each time you do that, your windows will be unhidden in reverse order. This history is not kept after NUtils is restarted.
+See [docs/BUILDING.md](docs/BUILDING.md). In short: install Rust (MSVC toolchain)
+and run `cargo build --release`.
 
-### 2.4: Making windows transparent
+## A note on antivirus
 
-There are times where you might find yourself in a situation in which you wish to interact with a window, yet you don't want the window to be visible on the screen. To make a window transparent, press windows+shift+\. To make the window solid again, press windows+shift+/. To interact with this window, you will need a screen reader. The act of making a window transparent throws off some screen readers that use display hooking, so there are limits to the use of this feature.
+Window-hiding utilities and AutoIt-packed executables are common sources of
+antivirus *false positives*. Version 4 is built to minimize that: native compiled
+code, only documented Win32 APIs, and no packing or obfuscation.
 
-### 2.5: Changing the Process Priority of the Active Window
+The one thing to be aware of: the flash-free auto-hide loads `nutils_hook.dll`
+into the app you designate via `SetWindowsHookEx` — a documented hook DLL, the
+same mechanism screen readers use, **not** remote-thread or memory-writing
+injection. Loading a DLL into another process can still draw attention from
+behavior-based antivirus, especially for an *unsigned* binary. **Code-signing
+`nutils.exe` and `nutils_hook.dll`** is therefore strongly recommended for any
+distribution; a signed hook DLL from a known publisher is treated the same way a
+signed screen reader is. If you would rather avoid injection entirely, delete
+`nutils_hook.dll` — NUtils falls back to the cross-process watcher (which may
+flash for a frame).
 
-If, for whatever reason, you wish to change the process priority of the active window, press control+shift+f3-f8, where f3 is low, f4 is below normal, f5 is normal, f6 is above normal, f7 is high, and f8 is realtime. A beep, pitched higher for higher priorities, will be played to let you know that the priority has been changed. If it could not be changed, a low beep will play, indicating that the process priority could not be changed.
+## License
 
-## 3: Other notes
-
-### 3.1: Limitations
-
-NUtils cannot perform actions on windows that it doesn't have permission to act upon. As a consequence, if NUtils is running normally, it cannot hide, change the process priority, or make transparent windows that are running with elevated privileges.
-
-### 3.2: Reducing the Size of NUtils
-
-If you want to make the NUtils package smaller, you can remove the sounds folder. NUtils will instead produce PC speaker beeps in place of the sounds that would have been played otherwise.
-
-### 3.3: The NUtils API
-
-There is a basic API to control NUtils. This API will allow your application to pass the handle of a window to NUtils. NUtils will find the first available slot starting from stack 1, and hide that window in that slot. When your application calls the NUtils API with the same parameters, NUtils will unhide that window. An AutoIt include file, NUtilsApi.au3, can be found in the NUtils folder. To use the API in your application, just include NUtilsApi.au3, and call _NUtils_ShowHide($handle) where $handle is the handle of the window you wish to hide.
-
-## 4: Contact us
-
-You may contact either Niko Carpenter or Tyler Spivey via email:
-
-<dl>
-
-<dt>Niko Carpenter (primary contact)</dt>
-
-<dd>nik62591@gmail.com</dd>
-
-<dt>Tyler Spivey</dt>
-
-<dd>tspivey@pcdesk.net</dd>
-
-</dl>
-
-## 5: Credits
-
-While I, Niko Carpenter, am the original coder for NUtils, I need to give credit to a few people who've helped me a lot along the way.
-
-1.  I give credit to Tyler Spivey, who has done most of the coding of NUtils other than myself. And for coming up with a great idea for the NUtils API/coding the NUtils API. He is the co-author of this program.
-2.  Justin Thornton, for giving me and Tyler the idea for stacks; without him, NUtils would still be limited to only 10 Windows. And to him for the process priority idea.
-3.  Matt King for the idea of Win+Shift+h, giving you the ability to just hide a window anywhere, and win+shift+l, allowing you to see and unhide your windows from anywhere.
-4.  And for everyone's great suggestions and feedback, and most importantly, your continued thanks and want to use NUtils has inspired me to work so much further than just suiting my needs.
-
-Remember, NUtils was once just one of my many personal scripts to make my life that much easier, one of those scripts that I would never release.
-
-## 6: License
-
-NUtils is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or any later version.
-
-NUtils is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with NUtils. If not, see [http://www.gnu.org/licenses/].
+NUtils is free software under the **GNU General Public License v3 or later**.
+Copyright © 2008–2010 Arbalon, Niko Carpenter, and Tyler Spivey; Rust rewrite 2026.
+See [legacy/src/license.txt](legacy/src/license.txt).
