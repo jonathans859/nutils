@@ -120,7 +120,7 @@ fn main() {
     let tray = tray::Tray::new(hwnd);
     let fb = feedback::Feedback::new(cfg.settings.feedback);
 
-    let app = App {
+    let mut app = App {
         hwnd,
         cfg,
         stacks,
@@ -130,6 +130,7 @@ fn main() {
         config_mtime: config_mtime(),
     };
     app.set_hotkeys(true);
+    app.fb.ready(); // startup: beep + "NUtils ready"
     APP.with(|a| *a.borrow_mut() = Some(app));
 
     unsafe {

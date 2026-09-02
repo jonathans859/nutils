@@ -7,7 +7,9 @@ many things open without them cluttering your taskbar, Alt-Tab order, or screen.
 Originally written in AutoIt (2008–2010) by **Niko Carpenter** and **Tyler Spivey**.
 Version 4 is a ground-up rewrite in **Rust** on the native Win32 API — a single
 self-contained ~0.5 MB executable with no runtime or redistributable dependency.
-The original sources are preserved under `legacy/`.
+The original AutoIt 3 sources are not kept in the working tree; they remain in
+this repository's Git history, before the v4 rewrite (commit `9dd82cc` and
+earlier).
 
 ## Features
 
@@ -163,4 +165,5 @@ flash for a frame).
 
 NUtils is free software under the **GNU General Public License v3 or later**.
 Copyright © 2008–2010 Arbalon, Niko Carpenter, and Tyler Spivey; Rust rewrite 2026.
-See [legacy/src/license.txt](legacy/src/license.txt).
+The full GPL text and the original authors' license notice are in the Git history
+(the AutoIt-era `license.txt`).

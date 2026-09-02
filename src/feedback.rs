@@ -131,6 +131,18 @@ impl Feedback {
         }
         self.speak("Configuration reloaded");
     }
+
+    /// Startup announcement: always a beep AND spoken "NUtils ready", regardless of
+    /// the configured feedback mode (so it is unmistakable that NUtils is running).
+    pub fn ready(&mut self) {
+        sound::solid();
+        if self.speaker.is_none() {
+            self.speaker = Speaker::new();
+        }
+        if let Some(s) = &mut self.speaker {
+            s.speak("NUtils ready");
+        }
+    }
 }
 
 fn priority_name(index: i32) -> &'static str {

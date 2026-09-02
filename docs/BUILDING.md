@@ -1,7 +1,8 @@
 # Building NUtils (Rust rewrite)
 
 NUtils 4.x is a native Windows application written in Rust. There is no AutoIt
-dependency any more; the old `.au3` sources are kept under `legacy/` for reference.
+dependency any more; the old `.au3` sources live in the Git history (before the
+v4 rewrite), not in the working tree.
 
 The workspace has three build outputs:
 
