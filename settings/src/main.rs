@@ -36,6 +36,7 @@ enum Act {
     WinKill,
     ManageApp,
     UnmanageApp,
+    Status,
 }
 
 const ROWS: &[(Act, &str)] = &[
@@ -49,6 +50,7 @@ const ROWS: &[(Act, &str)] = &[
     (Act::WinKill, "Kill active window"),
     (Act::ManageApp, "Auto-transparent active window's app"),
     (Act::UnmanageApp, "Stop auto-transparenting active window's app"),
+    (Act::Status, "Speak how many windows are hidden"),
 ];
 
 fn is_bass(act: Act) -> bool {
@@ -68,6 +70,7 @@ fn spec_of(cfg: &Config, act: Act) -> String {
         Act::WinKill => h.winkill.clone(),
         Act::ManageApp => h.manageapp.clone(),
         Act::UnmanageApp => h.unmanageapp.clone(),
+        Act::Status => h.status.clone(),
     }
 }
 
@@ -84,6 +87,7 @@ fn set_spec(cfg: &mut Config, act: Act, s: String) {
         Act::WinKill => h.winkill = s,
         Act::ManageApp => h.manageapp = s,
         Act::UnmanageApp => h.unmanageapp = s,
+        Act::Status => h.status = s,
     }
 }
 
@@ -602,6 +606,12 @@ fn main() {
         fb_sizer.add(&fb_choice, 1, SizerFlag::Expand, 0);
         gsizer.add_sizer(&fb_sizer, 0, SizerFlag::Expand | SizerFlag::All, 8);
 
+        let detail_cb = CheckBox::builder(&general)
+            .with_label("&Detailed status: also speak each hidden window's stack, position and title")
+            .build();
+        detail_cb.set_value(cfg.borrow().settings.detailed_status);
+        gsizer.add(&detail_cb, 0, SizerFlag::All, 8);
+
         general.set_sizer(gsizer, true);
         notebook.add_page(&general, "General", true, None);
 
@@ -745,6 +755,7 @@ fn main() {
         let save_cfg = cfg.clone();
         let sc = stack_cb;
         let fbc = fb_choice;
+        let dsc = detail_cb;
         let save_frame = frame;
         save.on_click(move |_| {
             save_cfg.borrow_mut().settings.stack_counter = sc.get_value();
@@ -753,6 +764,7 @@ fn main() {
                 Some(2) => FeedbackMode::Both,
                 _ => FeedbackMode::Beeps,
             };
+            save_cfg.borrow_mut().settings.detailed_status = dsc.get_value();
             let _ = save_cfg.borrow().save();
             save_frame.close(true);
         });

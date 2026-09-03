@@ -60,16 +60,35 @@ Default hotkeys (all configurable in `config.toml`):
 | Process priority (low→realtime) | `Ctrl+Shift+F3` … `Ctrl+Shift+F8` |
 | Start auto-transparenting the active window's app | `Win+Shift+A` |
 | Stop auto-transparenting it (make it solid again) | `Win+Shift+S` |
+| Speak the hidden-window status | `Win+Shift+I` |
 
 Slot `0` is the tenth slot, not slot zero. Pressing a slot's hotkey hides the
 active window there if the slot is empty, or brings that window back if occupied.
 You cannot unhide a window that is on a different stack without switching to it
 first. The desktop, taskbar, and Start menu cannot be hidden.
 
-The tray menu has a **Hidden** submenu listing every hidden window (grouped into
-per-stack submenus when they span several stacks); click one to unhide it.
+The tray menu opens with a status line — "3 windows hidden in 2 stacks" — followed
+by a **Hidden** submenu listing every hidden window (grouped into per-stack
+submenus when they span several stacks); click one to unhide it. Choosing the
+status line itself speaks the status, exactly as the status hotkey does.
 Configuration reloads automatically within about a second of `config.toml`
 changing — from the settings editor or a manual edit — so there is no reload item.
+
+### Hidden-window status
+
+**Win+Shift+I** speaks how many windows are hidden in how many stacks. This is
+always spoken, even when feedback is set to `beeps`, since a beep pattern cannot
+carry the information; if no speech is available at all it falls back to a single
+notification tone.
+
+Turn on **Detailed status** (General tab of the settings editor, or
+`detailed_status = true` under `[settings]`) to have it additionally name the
+current stack and then every hidden window by stack, position and title:
+
+> 3 windows hidden in 2 stacks. Current stack 1. Stack 1: position 1, Untitled -
+> Notepad; position 4, Inbox - Outlook. Stack 2: position 2, Calculator.
+
+Windows with no title at all are announced by their executable name.
 
 Making a window transparent throws off screen readers that rely on display
 hooking, so there are limits to that feature. NUtils cannot act on windows running

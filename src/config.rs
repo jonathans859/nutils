@@ -52,6 +52,9 @@ pub struct Hotkeys {
     /// Stop auto-transparenting the active window's app (and make it solid again).
     #[serde(default = "default_unmanageapp")]
     pub unmanageapp: String,
+    /// Speak how many windows are hidden in how many stacks.
+    #[serde(default = "default_status")]
+    pub status: String,
 }
 
 fn default_manageapp() -> String {
@@ -59,6 +62,9 @@ fn default_manageapp() -> String {
 }
 fn default_unmanageapp() -> String {
     "#+s".into()
+}
+fn default_status() -> String {
+    "#+i".into()
 }
 
 impl Default for Hotkeys {
@@ -74,6 +80,7 @@ impl Default for Hotkeys {
             winkill: "#{f4}".into(),
             manageapp: "#+a".into(),
             unmanageapp: "#+s".into(),
+            status: "#+i".into(),
         }
     }
 }
@@ -113,6 +120,10 @@ pub struct Settings {
     /// Beeps, spoken text, or both.
     #[serde(default)]
     pub feedback: FeedbackMode,
+    /// `true` = the status hotkey also lists each hidden window's stack, position
+    /// and title; `false` = it announces only the counts.
+    #[serde(default)]
+    pub detailed_status: bool,
 }
 
 fn default_true() -> bool {
@@ -124,6 +135,7 @@ impl Default for Settings {
         Settings {
             stack_counter: true,
             feedback: FeedbackMode::Beeps,
+            detailed_status: false,
         }
     }
 }
@@ -263,6 +275,7 @@ fn migrate_legacy() -> Option<Config> {
             winkill: g("winkill", &cfg.hotkeys.winkill),
             manageapp: g("manageapp", &cfg.hotkeys.manageapp),
             unmanageapp: g("unmanageapp", &cfg.hotkeys.unmanageapp),
+            status: g("status", &cfg.hotkeys.status),
         };
     }
 
@@ -270,6 +283,9 @@ fn migrate_legacy() -> Option<Config> {
         let s = parse_ini(&t);
         if let Some(sc) = ini_get(&s, "settings", "StackCounter") {
             cfg.settings.stack_counter = sc.trim() != "0";
+        }
+        if let Some(ds) = ini_get(&s, "settings", "DetailedStatus") {
+            cfg.settings.detailed_status = ds.trim() != "0";
         }
     }
 

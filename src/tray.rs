@@ -1,9 +1,10 @@
-//! System-tray icon and its right-click menu: a "Hidden" submenu listing every
-//! hidden window (grouped into per-stack submenus when they span several stacks),
-//! then Settings and Exit.
+//! System-tray icon and its right-click menu: a status line saying how many
+//! windows are hidden in how many stacks, a "Hidden" submenu listing every hidden
+//! window (grouped into per-stack submenus when they span several stacks), then
+//! Settings and Exit.
 
 use crate::stacks::{slot_to_human, Stacks, STACK_SIZE};
-use crate::window;
+use crate::{status, window};
 use std::collections::BTreeMap;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
@@ -18,11 +19,13 @@ pub const WM_TRAY: u32 = WM_APP + 1;
 // Fixed menu command ids; hidden-window entries use SLOT_BASE + slot index.
 const CMD_EXIT: usize = 1;
 const CMD_SETTINGS: usize = 2;
+const CMD_STATUS: usize = 3;
 const SLOT_BASE: usize = 1000;
 
 pub enum MenuChoice {
     Exit,
     Settings,
+    Status,
     Unhide(usize),
 }
 
@@ -71,15 +74,20 @@ fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
+// `wide` must be bound to a local before taking its pointer: inlining it into the
+// PCWSTR argument would free the buffer at the end of the statement, leaving
+// AppendMenuW reading dangling memory.
 fn append(menu: HMENU, id: usize, text: &str) {
+    let w = wide(text);
     unsafe {
-        let _ = AppendMenuW(menu, MF_STRING, id, PCWSTR(wide(text).as_ptr()));
+        let _ = AppendMenuW(menu, MF_STRING, id, PCWSTR(w.as_ptr()));
     }
 }
 
 fn append_submenu(parent: HMENU, sub: HMENU, text: &str) {
+    let w = wide(text);
     unsafe {
-        let _ = AppendMenuW(parent, MF_POPUP, sub.0 as usize, PCWSTR(wide(text).as_ptr()));
+        let _ = AppendMenuW(parent, MF_POPUP, sub.0 as usize, PCWSTR(w.as_ptr()));
     }
 }
 
@@ -87,6 +95,12 @@ fn append_submenu(parent: HMENU, sub: HMENU, text: &str) {
 pub fn show_menu(hwnd: HWND, stacks: &Stacks) -> Option<MenuChoice> {
     unsafe {
         let menu = CreatePopupMenu().ok()?;
+
+        // The status line, first so a screen reader reads it as the menu opens.
+        // It stays selectable (rather than greyed, which readers announce as
+        // "unavailable") and choosing it speaks the full status.
+        append(menu, CMD_STATUS, &status::brief(stacks));
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
 
         // Group hidden windows by their stack (BTreeMap keeps stacks in order).
         let mut by_stack: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
@@ -156,6 +170,7 @@ pub fn show_menu(hwnd: HWND, stacks: &Stacks) -> Option<MenuChoice> {
         Some(match id {
             CMD_EXIT => MenuChoice::Exit,
             CMD_SETTINGS => MenuChoice::Settings,
+            CMD_STATUS => MenuChoice::Status,
             _ => return None,
         })
     }

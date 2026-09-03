@@ -7,6 +7,7 @@ mod inject;
 mod murderer;
 mod sound;
 mod stacks;
+mod status;
 mod tray;
 mod ui;
 mod window;
@@ -38,7 +39,8 @@ const HK_MANAGEAPP: i32 = 26;
 const HK_UNMANAGEAPP: i32 = 27;
 const HK_STACKUP: i32 = 28;
 const HK_STACKDOWN: i32 = 29;
-const HK_MAX: i32 = 29;
+const HK_STATUS: i32 = 30;
+const HK_MAX: i32 = 30;
 
 struct App {
     hwnd: HWND,
@@ -206,6 +208,7 @@ impl App {
             HK_WINKILL => self.kill_active(),
             HK_STACKUP => self.stack_shift(true),
             HK_STACKDOWN => self.stack_shift(false),
+            HK_STATUS => self.announce_status(),
             HK_CHTITLE => self.change_title(),
             HK_MANAGEAPP => self.manage_active_app(),
             HK_UNMANAGEAPP => self.unmanage_active_app(),
@@ -256,6 +259,7 @@ impl App {
         reg(HK_UNMANAGEAPP, &hk.unmanageapp);
         reg(HK_STACKUP, &hk.stackup);
         reg(HK_STACKDOWN, &hk.stackdown);
+        reg(HK_STATUS, &hk.status);
     }
 
     // ---- window actions ---------------------------------------------------
@@ -319,6 +323,17 @@ impl App {
         } else {
             self.fb.priority_error();
         }
+    }
+
+    /// Speak how many windows are hidden in how many stacks — plus, when
+    /// `detailed_status` is on, each window's stack, position and title.
+    fn announce_status(&mut self) {
+        let text = if self.cfg.settings.detailed_status {
+            status::detailed(&self.stacks)
+        } else {
+            status::brief(&self.stacks)
+        };
+        self.fb.status(&text);
     }
 
     fn stack_shift(&mut self, up: bool) {
@@ -458,6 +473,7 @@ impl App {
         match choice {
             Some(MenuChoice::Exit) => return false,
             Some(MenuChoice::Settings) => self.launch_settings(),
+            Some(MenuChoice::Status) => self.announce_status(),
             Some(MenuChoice::Unhide(slot)) => self.unhide_slot(slot),
             None => {}
         }

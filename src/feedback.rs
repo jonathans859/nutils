@@ -140,6 +140,19 @@ impl Feedback {
         }
     }
 
+    /// Announce the hidden-window status. Status is information rather than an
+    /// action cue, so it is always spoken even in `Beeps` mode — a beep pattern
+    /// cannot convey it — and beeps only accompany it when text is unavailable.
+    pub fn status(&mut self, text: &str) {
+        if self.speaker.is_none() {
+            self.speaker = Speaker::new();
+        }
+        match &mut self.speaker {
+            Some(s) => s.speak(text),
+            None => sound::notify(),
+        }
+    }
+
     /// Startup announcement: always a beep AND spoken "NUtils ready", regardless of
     /// the configured feedback mode (so it is unmistakable that NUtils is running).
     /// Speaks first so the voice overlaps the ascending tone.

@@ -133,6 +133,33 @@ impl Stacks {
         self.history.retain(|&s| s != slot);
     }
 
+    /// Every occupied slot as `(slot index, window id)`, in slot order.
+    pub fn occupied(&self) -> Vec<(usize, WinId)> {
+        self.slots
+            .iter()
+            .enumerate()
+            .filter(|(_, &id)| id != 0)
+            .map(|(i, &id)| (i, id))
+            .collect()
+    }
+
+    /// How many distinct stacks currently hold at least one hidden window.
+    pub fn stacks_in_use(&self) -> usize {
+        let mut seen: Vec<usize> = Vec::new();
+        for (i, _) in self.occupied() {
+            let stack = i / STACK_SIZE;
+            if !seen.contains(&stack) {
+                seen.push(stack);
+            }
+        }
+        seen.len()
+    }
+
+    /// The 1-based number of the stack the digit hotkeys currently address.
+    pub fn current_stack(&self) -> usize {
+        self.shift / STACK_SIZE + 1
+    }
+
     /// Trim trailing empty slots back down to a multiple of [`STACK_SIZE`]
     /// (keeping at least one stack).
     pub fn prune(&mut self) {

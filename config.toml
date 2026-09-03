@@ -19,10 +19,14 @@ firstavailhide = "#+h"
 winkill = "#{f4}"    # kill active window's process
 manageapp = "#+a"    # start auto-transparenting the active window's app
 unmanageapp = "#+s"  # stop auto-transparenting it (and make its windows solid again)
+status = "#+i"       # speak how many windows are hidden in how many stacks
 
 [settings]
 stack_counter = true     # true: beep N times on stack N; false: use number sound pack
 feedback = "beeps"       # "beeps" | "text" | "both"  (text/both speak via NVDA, else SAPI)
+detailed_status = false  # true: the status hotkey also names each hidden window
+                         # (stack, position and title) instead of just the counts.
+                         # Status is always spoken, even in "beeps" mode.
 
 # --- WinMurderer: auto-close/kill windows on sight ---
 # [[rules]]
