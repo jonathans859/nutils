@@ -106,10 +106,12 @@ pub fn play_or(name: &str, fallback: impl FnOnce()) {
     }
 }
 
-// Toggle cues use a consistent metaphor: a rising two-tone (low -> high) for
-// turning something ON, and a falling two-tone (high -> low) for turning it OFF.
-// Hiding lives in a lower pitch band and transparency in a higher one, so the two
-// kinds of toggle are easy to tell apart by ear.
+// Toggle cues use a consistent metaphor: the window going away (hidden, made
+// transparent) falls in pitch, and the window coming back (shown, made solid)
+// rises. Hiding lives in a lower pitch band and transparency in a higher one, so
+// the two kinds of toggle are easy to tell apart by ear. The app-wide
+// (auto-transparent) toggles use the same directions with a third tone, so "this
+// app" and "this window" are distinguishable by tone count alone.
 
 /// Hide a window — falling, low band (going away = pitch down).
 pub fn window_down() {
@@ -128,18 +130,43 @@ pub fn window_up() {
 pub fn cannot_hide() {
     play_or("HideEr", || tone(196, 120));
 }
-/// Make transparent / auto-transparent ON — rising, high band.
+/// Make transparent — falling, high band (going away = pitch down, as with hide).
 pub fn transparent() {
     play_or("transparent", || {
+        tone(880, 60);
+        tone(659, 60);
+    });
+}
+/// Make solid — rising, high band (coming back = pitch up, as with unhide).
+pub fn solid() {
+    play_or("solid", || {
         tone(659, 60);
         tone(880, 60);
     });
 }
-/// Make solid / auto-transparent OFF — falling, high band.
-pub fn solid() {
-    play_or("solid", || {
+/// Auto-transparent ON — the falling transparency cue plus a third tone, so an
+/// app-wide toggle is audibly distinct from a single-window one.
+pub fn auto_transparent() {
+    play_or("autotransparent", || {
+        tone(1047, 60);
         tone(880, 60);
         tone(659, 60);
+    });
+}
+/// Auto-transparent OFF — rising three-tone, the mirror of `auto_transparent`.
+pub fn auto_solid() {
+    play_or("autosolid", || {
+        tone(659, 60);
+        tone(880, 60);
+        tone(1047, 60);
+    });
+}
+/// A refusal: a low, falling double tone for an action that was not allowed
+/// (e.g. a per-window transparency hotkey on an auto-transparent app).
+pub fn refused() {
+    play_or("refused", || {
+        tone(196, 70);
+        tone(147, 70);
     });
 }
 /// A neutral, non-toggle chirp (e.g. configuration reloaded).

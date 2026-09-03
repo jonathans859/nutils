@@ -111,6 +111,23 @@ value = "wxdragon.exe" # case-insensitive
 To stop, press **Win+Shift+S** on any window of that app: NUtils removes it from
 the list, stops the in-process helper, and makes its windows solid again.
 
+Both cues play **three** tones (falling when auto-transparent goes on, rising when
+it goes off), against the **two** tones of the plain per-window transparent/solid
+cues — so you can hear whether you just changed one window or the whole app. A
+sound pack can override them with `autotransparent.wav` / `autosolid.wav`.
+
+The two mechanisms stay out of each other's way, so nothing fights over a window:
+
+- On a window of an auto-transparent app the **per-window** hotkeys
+  (`Win+Shift+\` / `Win+Shift+/`) are refused with a low double tone — the app's
+  transparency belongs to auto-transparent, which would just re-apply it. Stop
+  auto-transparenting the app first.
+- **Win+Shift+S** only stops auto-transparenting; on an app that isn't on the
+  list it is refused rather than making a hand-transparented window solid.
+- **Win+Shift+A** works on a window you made transparent by hand. That window
+  keeps its manual state: when you later press Win+Shift+S the app's other
+  windows go solid and this one stays transparent until you press `Win+Shift+/`.
+
 This works in two layers:
 
 - A standard `SetWinEventHook` accessibility watcher running inside NUtils' own

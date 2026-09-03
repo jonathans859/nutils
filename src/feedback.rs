@@ -124,13 +124,27 @@ impl Feedback {
     pub fn managed(&mut self, exe: &str) {
         self.speak(&format!("Auto-transparent {exe}"));
         if self.should_beep() {
-            sound::transparent(); // auto-transparent ON: rising cue
+            sound::auto_transparent(); // three rising tones, vs two for one window
         }
     }
     pub fn unmanaged(&mut self, exe: &str) {
         self.speak(&format!("Stopped auto-transparent {exe}"));
         if self.should_beep() {
-            sound::solid();
+            sound::auto_solid();
+        }
+    }
+    /// A per-window transparency hotkey was pressed on an auto-transparent app.
+    pub fn managed_blocked(&mut self) {
+        self.speak("This app is auto-transparent");
+        if self.should_beep() {
+            sound::refused();
+        }
+    }
+    /// The stop-auto-transparent hotkey was pressed on an app that isn't managed.
+    pub fn not_managed(&mut self) {
+        self.speak("This app is not auto-transparent");
+        if self.should_beep() {
+            sound::refused();
         }
     }
     pub fn reloaded(&mut self) {

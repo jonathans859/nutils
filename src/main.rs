@@ -49,6 +49,11 @@ struct App {
     _tray: tray::Tray,
     hook: winevent::HookThread,
     fb: feedback::Feedback,
+    /// Windows made transparent by the per-window hotkey (as opposed to by an
+    /// auto-transparent app). Manual transparency is the user's own state: the
+    /// auto-transparent hotkeys never undo it, and stopping auto-transparent
+    /// leaves these windows transparent. Pruned on the timer tick.
+    manual_transparent: std::collections::HashSet<window::WinId>,
     /// Last-seen modification time of config.toml, for change-driven reloads.
     config_mtime: Option<std::time::SystemTime>,
 }
@@ -127,6 +132,7 @@ fn main() {
         _tray: tray,
         hook,
         fb,
+        manual_transparent: std::collections::HashSet::new(),
         config_mtime: config_mtime(),
     };
     app.set_hotkeys(true);
@@ -302,11 +308,24 @@ impl App {
         self.stacks.save();
     }
 
+    /// Per-window transparency (Win+Shift+\ and Win+Shift+/).
+    ///
+    /// Refused on a window of an auto-transparent app: that app's transparency is
+    /// owned by the auto-transparent machinery — the in-process helper and the
+    /// window-event watcher would just re-apply it — so the two must not fight.
+    /// Stop auto-transparenting the app first.
     fn set_transparent(&mut self, alpha: u8) {
-        window::set_alpha(root(window::foreground()), alpha);
+        let hwnd = root(window::foreground());
+        if winevent::is_managed_window(hwnd) {
+            self.fb.managed_blocked();
+            return;
+        }
+        window::set_alpha(hwnd, alpha);
         if alpha == 0 {
+            self.manual_transparent.insert(to_id(hwnd));
             self.fb.transparent();
         } else {
+            self.manual_transparent.remove(&to_id(hwnd));
             self.fb.solid();
         }
     }
@@ -437,6 +456,11 @@ impl App {
 
     /// Stop auto-transparenting the active window's app: remove it from the managed
     /// list, stop injecting into it, and make its windows solid again.
+    ///
+    /// Refused unless the app really is on the managed list: this hotkey undoes
+    /// auto-transparency only, never a window the user made transparent by hand.
+    /// For the same reason, windows in `manual_transparent` stay transparent —
+    /// they go back to being the user's own manual state, undone with Win+Shift+/.
     fn unmanage_active_app(&mut self) {
         self.set_hotkeys(false);
         let active = root(window::foreground());
@@ -445,16 +469,21 @@ impl App {
             self.cfg
                 .managed_apps
                 .retain(|a| !(a.match_kind == MatchKind::Exe && a.value.eq_ignore_ascii_case(&exe)));
-            if self.cfg.managed_apps.len() != before {
-                let _ = self.cfg.save();
-                self.config_mtime = config_mtime();
-                winevent::set_managed(&self.cfg.managed_apps);
+            if self.cfg.managed_apps.len() == before {
+                self.fb.not_managed();
+                self.set_hotkeys(true);
+                return;
             }
+            let _ = self.cfg.save();
+            self.config_mtime = config_mtime();
+            winevent::set_managed(&self.cfg.managed_apps);
             // Stop the in-process helper FIRST, so it can't re-transparent windows,
             // then make every window this app currently owns solid again.
             inject::uninstall_owner(active);
             for w in window::enum_top_windows() {
-                if window::owner_exe(w).as_deref() == Some(exe.as_str()) {
+                if window::owner_exe(w).as_deref() == Some(exe.as_str())
+                    && !self.manual_transparent.contains(&to_id(w))
+                {
                     window::set_alpha(w, 255);
                 }
             }
@@ -502,6 +531,7 @@ impl App {
             self.stacks.prune();
             self.stacks.save();
         }
+        self.manual_transparent.retain(|&id| window::exists(from_id(id)));
         murderer::sweep(&self.cfg.rules);
 
         // Live-reload if the settings editor (or a manual edit) changed config.toml.
