@@ -30,7 +30,6 @@ enum Act {
     StackUp,
     StackDown,
     FirstAvail,
-    WinLs,
     Transparent,
     Solid,
     ChTitle,
@@ -44,7 +43,6 @@ const ROWS: &[(Act, &str)] = &[
     (Act::StackUp, "Next stack"),
     (Act::StackDown, "Previous stack"),
     (Act::FirstAvail, "Hide in first free slot"),
-    (Act::WinLs, "Show unhide list"),
     (Act::Transparent, "Make window transparent"),
     (Act::Solid, "Make window solid"),
     (Act::ChTitle, "Change window title"),
@@ -64,7 +62,6 @@ fn spec_of(cfg: &Config, act: Act) -> String {
         Act::StackUp => h.stackup.clone(),
         Act::StackDown => h.stackdown.clone(),
         Act::FirstAvail => h.firstavailhide.clone(),
-        Act::WinLs => h.winls.clone(),
         Act::Transparent => h.transparent.clone(),
         Act::Solid => h.solid.clone(),
         Act::ChTitle => h.chtitle.clone(),
@@ -81,7 +78,6 @@ fn set_spec(cfg: &mut Config, act: Act, s: String) {
         Act::StackUp => h.stackup = s,
         Act::StackDown => h.stackdown = s,
         Act::FirstAvail => h.firstavailhide = s,
-        Act::WinLs => h.winls = s,
         Act::Transparent => h.transparent = s,
         Act::Solid => h.solid = s,
         Act::ChTitle => h.chtitle = s,
@@ -475,16 +471,15 @@ fn prompt_for_shortcut(
     };
     update_preview();
 
-    // Key capture: press any key in the key field.
+    // Key capture: press a key in the key field to set ONLY the key. Modifiers are
+    // chosen via the checkable Modifiers list, so a keypress must not touch them
+    // (pressing a plain key used to clear the checkboxes the user had set).
     if !bass {
-        let mods_c = mods;
         let key_c = key_field;
         let upd = update_preview.clone();
         key_field.on_key_down(move |event| {
             if let WindowEventData::Keyboard(ref ke) = event {
                 let code = ke.get_key_code().unwrap_or(0);
-                let (ctrl, shift, alt, win) =
-                    (ke.control_down(), ke.shift_down(), ke.alt_down(), ke.meta_down());
                 if is_modifier_code(code) {
                     event.skip(false);
                     return;
@@ -497,10 +492,6 @@ fn prompt_for_shortcut(
                     return;
                 }
                 if let Some(name) = keycode_to_keyname(code) {
-                    mods_c.check(0, ctrl);
-                    mods_c.check(1, shift);
-                    mods_c.check(2, win);
-                    mods_c.check(3, alt);
                     key_c.set_value(&name);
                     upd();
                     event.skip(false);
@@ -543,16 +534,27 @@ fn prompt_for_shortcut(
         key_field.set_focus();
     }
 
-    match dialog.show_modal() {
-        ID_OK => {
-            let chord = read_chord();
-            if !bass && chord.key.trim().is_empty() {
-                Some(Some(String::new())) // no key -> unbound
-            } else {
-                Some(Some(build_spec(&chord, bass)))
+    loop {
+        match dialog.show_modal() {
+            ID_OK => {
+                let chord = read_chord();
+                // An empty key clears the binding — that's allowed.
+                if !bass && chord.key.trim().is_empty() {
+                    return Some(Some(String::new()));
+                }
+                // A real shortcut must have at least one modifier; a bare key is
+                // rejected and the dialog re-opens so the user can add one.
+                if !bass && !(chord.ctrl || chord.shift || chord.win || chord.alt) {
+                    let msg = "A shortcut needs at least one modifier: Ctrl, Shift, Windows, or Alt.";
+                    info_label.set_label(msg);
+                    #[cfg(windows)]
+                    live.announce(msg);
+                    continue;
+                }
+                return Some(Some(build_spec(&chord, bass)));
             }
+            _ => return None,
         }
-        _ => None,
     }
 }
 // ---------------------------------------------------------------------------

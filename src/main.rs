@@ -16,7 +16,6 @@ use config::{Config, ManagedApp, MatchKind};
 use stacks::{human_to_slot, Stacks, STACK_SIZE};
 use std::cell::RefCell;
 use tray::MenuChoice;
-use ui::UnhideChoice;
 use window::{from_id, root, to_id};
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
@@ -34,7 +33,6 @@ const HK_CHTITLE: i32 = 20;
 const HK_TRANSPARENT: i32 = 21;
 const HK_SOLID: i32 = 22;
 const HK_FIRSTAVAIL: i32 = 23;
-const HK_WINLS: i32 = 24;
 const HK_WINKILL: i32 = 25;
 const HK_MANAGEAPP: i32 = 26;
 const HK_UNMANAGEAPP: i32 = 27;
@@ -209,7 +207,6 @@ impl App {
             HK_STACKUP => self.stack_shift(true),
             HK_STACKDOWN => self.stack_shift(false),
             HK_CHTITLE => self.change_title(),
-            HK_WINLS => self.show_unhide_dialog(),
             HK_MANAGEAPP => self.manage_active_app(),
             HK_UNMANAGEAPP => self.unmanage_active_app(),
             _ => {}
@@ -254,7 +251,6 @@ impl App {
         reg(HK_TRANSPARENT, &hk.transparent);
         reg(HK_SOLID, &hk.solid);
         reg(HK_FIRSTAVAIL, &hk.firstavailhide);
-        reg(HK_WINLS, &hk.winls);
         reg(HK_WINKILL, &hk.winkill);
         reg(HK_MANAGEAPP, &hk.manageapp);
         reg(HK_UNMANAGEAPP, &hk.unmanageapp);
@@ -347,25 +343,6 @@ impl App {
             if !new.is_empty() {
                 window::set_title(target, &new);
             }
-        }
-        self.set_hotkeys(true);
-    }
-
-    fn show_unhide_dialog(&mut self) {
-        self.set_hotkeys(false);
-        let choice = ui::unhide_dialog(&self.stacks);
-        match choice {
-            Some(UnhideChoice::Slot(i)) => self.unhide_slot(i),
-            Some(UnhideChoice::Stack(s)) => {
-                let start = s * STACK_SIZE;
-                let end = (start + STACK_SIZE).min(self.stacks.slots.len());
-                for i in start..end {
-                    if self.stacks.get(i) != 0 {
-                        self.unhide_slot(i);
-                    }
-                }
-            }
-            None => {}
         }
         self.set_hotkeys(true);
     }

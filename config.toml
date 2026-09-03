@@ -16,7 +16,6 @@ chtitle = "#+t"      # change active window's title
 transparent = '#+\'  # make active window transparent (invisible)
 solid = "#+/"        # make active window solid again
 firstavailhide = "#+h"
-winls = "#+l"        # unhide-tree dialog
 winkill = "#{f4}"    # kill active window's process
 manageapp = "#+a"    # start auto-transparenting the active window's app
 unmanageapp = "#+s"  # stop auto-transparenting it (and make its windows solid again)

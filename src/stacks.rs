@@ -133,10 +133,6 @@ impl Stacks {
         self.history.retain(|&s| s != slot);
     }
 
-    pub fn last_hidden(&self) -> Option<usize> {
-        self.history.last().copied()
-    }
-
     /// Trim trailing empty slots back down to a multiple of [`STACK_SIZE`]
     /// (keeping at least one stack).
     pub fn prune(&mut self) {
@@ -150,18 +146,6 @@ impl Stacks {
         self.slots.resize(new_len, 0);
     }
 
-    pub fn stack_count(&self) -> usize {
-        (self.slots.len() + STACK_SIZE - 1) / STACK_SIZE
-    }
-
-    pub fn is_stack_empty(&self, stack: usize) -> bool {
-        let start = stack * STACK_SIZE;
-        let end = (start + STACK_SIZE).min(self.slots.len());
-        if start >= self.slots.len() {
-            return true;
-        }
-        self.slots[start..end].iter().all(|&id| id == 0)
-    }
 }
 
 /// Slot index (0-based) to the human 1..10 label the UI shows.

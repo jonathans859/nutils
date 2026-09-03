@@ -25,7 +25,8 @@ earlier).
   [Auto-transparent apps](#auto-transparent-apps).
 - **Kill the active window's process** (Win+F4) for unresponsive apps.
 - **Change a window's title** (Win+Shift+T) to tell same-named windows apart.
-- **Unhide tree dialog** (Win+Shift+L) listing every hidden window by stack.
+- **Unhide from the tray** — a "Hidden" submenu lists every hidden window, grouped
+  per stack; click one to bring it back.
 - **Set the active process's priority** (Ctrl+Shift+F3…F8: low → realtime).
 - **WinMurderer** — automatically close or kill windows matching a watch-list.
 - **Hidden state survives a restart** of NUtils (but not a reboot — handles are
@@ -53,7 +54,6 @@ Default hotkeys (all configurable in `config.toml`):
 | Hide / unhide window in slot 1–10 | `Ctrl+Shift+1` … `Ctrl+Shift+0` |
 | Next / previous stack | `Ctrl+Shift+=` / `Ctrl+Shift+-` |
 | Hide in first free slot | `Win+Shift+H` |
-| Unhide tree dialog | `Win+Shift+L` |
 | Make transparent / solid | `Win+Shift+\` / `Win+Shift+/` |
 | Change active window title | `Win+Shift+T` |
 | Kill active window's process | `Win+F4` |

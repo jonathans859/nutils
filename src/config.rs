@@ -45,7 +45,6 @@ pub struct Hotkeys {
     pub transparent: String,
     pub solid: String,
     pub firstavailhide: String,
-    pub winls: String,
     pub winkill: String,
     /// Add the active window's app to the auto-transparent list.
     #[serde(default = "default_manageapp")]
@@ -72,7 +71,6 @@ impl Default for Hotkeys {
             transparent: "#+\\".into(),
             solid: "#+/".into(),
             firstavailhide: "#+h".into(),
-            winls: "#+l".into(),
             winkill: "#{f4}".into(),
             manageapp: "#+a".into(),
             unmanageapp: "#+s".into(),
@@ -262,7 +260,6 @@ fn migrate_legacy() -> Option<Config> {
             transparent: g("transparent", &cfg.hotkeys.transparent),
             solid: g("solid", &cfg.hotkeys.solid),
             firstavailhide: g("firstavailhide", &cfg.hotkeys.firstavailhide),
-            winls: g("winls", &cfg.hotkeys.winls),
             winkill: g("winkill", &cfg.hotkeys.winkill),
             manageapp: g("manageapp", &cfg.hotkeys.manageapp),
             unmanageapp: g("unmanageapp", &cfg.hotkeys.unmanageapp),
