@@ -50,98 +50,107 @@ impl Feedback {
     }
 
     // --- named cues (mirror the `sound` module) ---------------------------
+    //
+    // Speech is fired BEFORE the beep in every cue. `speak` is asynchronous (NVDA
+    // and SAPI both return immediately and speak in the background), while the beep
+    // plays synchronously — so speaking first means the voice and the tone overlap
+    // instead of the voice waiting for the tone to finish.
 
     pub fn window_down(&mut self) {
+        self.speak("Hidden");
         if self.should_beep() {
             sound::window_down();
         }
-        self.speak("Hidden");
     }
     pub fn window_up(&mut self) {
+        self.speak("Shown");
         if self.should_beep() {
             sound::window_up();
         }
-        self.speak("Shown");
     }
     pub fn cannot_hide(&mut self) {
+        self.speak("Cannot hide this window");
         if self.should_beep() {
             sound::cannot_hide();
         }
-        self.speak("Cannot hide this window");
     }
     pub fn transparent(&mut self) {
+        self.speak("Transparent");
         if self.should_beep() {
             sound::transparent();
         }
-        self.speak("Transparent");
     }
     pub fn solid(&mut self) {
+        self.speak("Solid");
         if self.should_beep() {
             sound::solid();
         }
-        self.speak("Solid");
     }
     pub fn killed(&mut self) {
+        self.speak("Killed");
         if self.should_beep() {
             sound::killed();
         }
-        self.speak("Killed");
     }
     pub fn disappeared(&mut self) {
+        self.speak("Window gone");
         if self.should_beep() {
             sound::disappeared();
         }
-        self.speak("Window gone");
     }
     pub fn priority(&mut self, index: i32) {
+        self.speak(priority_name(index));
         if self.should_beep() {
             sound::priority(index);
         }
-        self.speak(priority_name(index));
     }
     pub fn priority_error(&mut self) {
+        self.speak("Could not change priority");
         if self.should_beep() {
             sound::priority_error();
         }
-        self.speak("Could not change priority");
     }
     pub fn stack(&mut self, stack: usize, use_counter: bool) {
+        self.speak(&format!("Stack {stack}"));
         if self.should_beep() {
-            if use_counter || !sound::play_number(stack) {
-                sound::stack_beeps(stack);
+            if use_counter {
+                sound::stack_beeps(stack); // announce the number by beeping N times
+            } else if !sound::play_number(stack) {
+                // Counter off and no number sound pack: a single cue, not N beeps.
+                sound::notify();
             }
         }
-        self.speak(&format!("Stack {stack}"));
     }
     pub fn managed(&mut self, exe: &str) {
-        if self.should_beep() {
-            sound::solid();
-        }
         self.speak(&format!("Auto-transparent {exe}"));
+        if self.should_beep() {
+            sound::transparent(); // auto-transparent ON: rising cue
+        }
     }
     pub fn unmanaged(&mut self, exe: &str) {
+        self.speak(&format!("Stopped auto-transparent {exe}"));
         if self.should_beep() {
             sound::solid();
         }
-        self.speak(&format!("Stopped auto-transparent {exe}"));
     }
     pub fn reloaded(&mut self) {
-        if self.should_beep() {
-            sound::solid();
-        }
         self.speak("Configuration reloaded");
+        if self.should_beep() {
+            sound::notify();
+        }
     }
 
     /// Startup announcement: always a beep AND spoken "NUtils ready", regardless of
     /// the configured feedback mode (so it is unmistakable that NUtils is running).
+    /// Speaks first so the voice overlaps the ascending tone.
     pub fn ready(&mut self) {
-        sound::solid();
         if self.speaker.is_none() {
             self.speaker = Speaker::new();
         }
         if let Some(s) = &mut self.speaker {
             s.speak("NUtils ready");
         }
+        sound::startup();
     }
 }
 

@@ -3,8 +3,12 @@
 
 use std::path::PathBuf;
 use windows::core::PCWSTR;
-use windows::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_FILENAME, SND_NODEFAULT};
+use windows::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_FILENAME, SND_MEMORY, SND_NODEFAULT};
 use windows::Win32::System::Diagnostics::Debug::Beep;
+
+/// Peak amplitude of generated tones (0.0–1.0). Kept low so cues are soft.
+const TONE_AMP: f32 = 0.20;
+const TONE_RATE: u32 = 22_050;
 
 fn sounds_dir() -> PathBuf {
     std::env::current_exe()
@@ -18,6 +22,63 @@ pub fn beep(freq: u32, dur_ms: u32) {
     unsafe {
         let _ = Beep(freq, dur_ms);
     }
+}
+
+/// Play a soft sine tone: a `freq` Hz sine at low amplitude with a short
+/// raised-cosine fade in/out (so there is no hard click), rendered to an in-memory
+/// WAV and played synchronously. Much gentler than the square-wave `Beep`.
+pub fn tone(freq: u32, dur_ms: u32) {
+    let n = (TONE_RATE as u64 * dur_ms as u64 / 1000) as usize;
+    if n == 0 {
+        return;
+    }
+    let edge = ((TONE_RATE as usize * 6 / 1000).max(1)).min(n / 2); // ~6ms fade
+    let step = 2.0 * std::f32::consts::PI * freq as f32 / TONE_RATE as f32;
+    let mut pcm: Vec<u8> = Vec::with_capacity(n * 2);
+    for i in 0..n {
+        let env = if i < edge {
+            0.5 - 0.5 * (std::f32::consts::PI * i as f32 / edge as f32).cos()
+        } else if i >= n - edge {
+            0.5 - 0.5 * (std::f32::consts::PI * (n - i) as f32 / edge as f32).cos()
+        } else {
+            1.0
+        };
+        let s = (step * i as f32).sin() * TONE_AMP * env;
+        let v = (s * i16::MAX as f32) as i16;
+        pcm.extend_from_slice(&v.to_le_bytes());
+    }
+    let wav = build_wav(&pcm);
+    unsafe {
+        // With SND_MEMORY the first arg is a pointer to the WAV bytes; sync play
+        // (no SND_ASYNC) keeps `wav` alive for the duration of playback.
+        let _ = PlaySoundW(
+            PCWSTR(wav.as_ptr() as *const u16),
+            None,
+            SND_MEMORY | SND_NODEFAULT,
+        );
+    }
+}
+
+/// Wrap 16-bit mono PCM samples in a minimal RIFF/WAVE container.
+fn build_wav(pcm: &[u8]) -> Vec<u8> {
+    let data_len = pcm.len() as u32;
+    let byte_rate = TONE_RATE * 2; // mono, 2 bytes/sample
+    let mut w = Vec::with_capacity(44 + pcm.len());
+    w.extend_from_slice(b"RIFF");
+    w.extend_from_slice(&(36 + data_len).to_le_bytes());
+    w.extend_from_slice(b"WAVE");
+    w.extend_from_slice(b"fmt ");
+    w.extend_from_slice(&16u32.to_le_bytes()); // PCM fmt chunk size
+    w.extend_from_slice(&1u16.to_le_bytes()); // format = PCM
+    w.extend_from_slice(&1u16.to_le_bytes()); // channels = mono
+    w.extend_from_slice(&TONE_RATE.to_le_bytes());
+    w.extend_from_slice(&byte_rate.to_le_bytes());
+    w.extend_from_slice(&2u16.to_le_bytes()); // block align
+    w.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+    w.extend_from_slice(b"data");
+    w.extend_from_slice(&data_len.to_le_bytes());
+    w.extend_from_slice(pcm);
+    w
 }
 
 /// Returns true if `sounds\<name>.wav` was played.
@@ -45,25 +106,53 @@ pub fn play_or(name: &str, fallback: impl FnOnce()) {
     }
 }
 
-// Named cues mirroring the original sound set.
+// Toggle cues use a consistent metaphor: a rising two-tone (low -> high) for
+// turning something ON, and a falling two-tone (high -> low) for turning it OFF.
+// Hiding lives in a lower pitch band and transparency in a higher one, so the two
+// kinds of toggle are easy to tell apart by ear.
+
+/// Hide a window — falling, low band (going away = pitch down).
 pub fn window_down() {
-    play_or("windown", || beep(1500, 100));
+    play_or("windown", || {
+        tone(587, 60);
+        tone(440, 60);
+    });
 }
+/// Unhide a window — rising, low band (coming back = pitch up).
 pub fn window_up() {
     play_or("winup", || {
-        beep(1500, 50);
-        beep(1500, 50);
+        tone(440, 60);
+        tone(587, 60);
     });
 }
 pub fn cannot_hide() {
-    play_or("HideEr", || beep(70, 100));
+    play_or("HideEr", || tone(196, 120));
 }
+/// Make transparent / auto-transparent ON — rising, high band.
 pub fn transparent() {
-    beep(1760, 50);
+    play_or("transparent", || {
+        tone(659, 60);
+        tone(880, 60);
+    });
 }
+/// Make solid / auto-transparent OFF — falling, high band.
 pub fn solid() {
-    beep(1760, 50);
-    beep(1760, 50);
+    play_or("solid", || {
+        tone(880, 60);
+        tone(659, 60);
+    });
+}
+/// A neutral, non-toggle chirp (e.g. configuration reloaded).
+pub fn notify() {
+    play_or("notify", || tone(587, 90));
+}
+/// A short ascending "ready" cue played at startup.
+pub fn startup() {
+    play_or("ready", || {
+        tone(440, 60);
+        tone(587, 60);
+        tone(698, 60);
+    });
 }
 pub fn killed() {
     play_or("kill", || beep(60, 300));
@@ -88,7 +177,7 @@ pub fn priority_error() {
 pub fn stack_beeps(stack: usize) {
     for _ in 0..stack {
         if !play_wav("stack", false) {
-            beep(2000, 60);
+            tone(659, 60);
         }
     }
 }
