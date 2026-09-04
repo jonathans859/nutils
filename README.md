@@ -32,9 +32,11 @@ earlier).
 - **Hidden state survives a restart** of NUtils (but not a reboot — handles are
   meaningless after one, so they are discarded).
 - **Feedback your way** — beeps, spoken text, or both. Spoken text goes through
-  your **screen reader** when one is running (NVDA, via its controller client),
-  and falls back to built-in Windows SAPI otherwise — so you hear your own voice,
-  not a second one talking over it.
+  your **screen reader**: release builds speak via Prism, which reaches NVDA over
+  its own RPC endpoint (and also JAWS, ZoomText and Narrator), so a single
+  `nutils.exe` copied to another machine still talks. Builds made without the
+  `speech` feature use NVDA's `nvdaControllerClient64.dll` if it sits next to the
+  exe, and fall back to Windows SAPI otherwise.
 - **Optional WAV sound packs** in place of the built-in PC-speaker beeps.
 - **Accessible settings editor** — rebind every shortcut in a native wxWidgets
   dialog built for screen readers. See [Settings](#settings).

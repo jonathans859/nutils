@@ -77,7 +77,7 @@ Ship the executable together with these, in the same folder:
 ```
 nutils.exe
 nutils_hook.dll             (the in-process auto-hide helper; MUST sit next to nutils.exe)
-nvdaControllerClient64.dll  (optional; enables speaking through NVDA — see Spoken feedback)
+nvdaControllerClient64.dll  (default builds only; a Prism build speaks to NVDA on its own)
 nutils-settings.exe         (the settings editor, launched from the tray)
 sounds\                     (optional WAV sound pack; PC-speaker beeps used if absent)
 config.toml                 (optional sample; the real config is at %APPDATA%\NUtils)
@@ -99,40 +99,61 @@ to the executable.
 Choose **Feedback: Spoken text** (or Both) in Settings → General to have NUtils
 speak each action ("Hidden", "Stack 2", "Transparent", …).
 
-By default, speech goes through the **active screen reader** when one is running:
-NUtils loads `nvdaControllerClient64.dll` (ship it next to `nutils.exe`) and speaks
-through **NVDA**. This needs no extra build tooling — it's a plain LoadLibrary at
-runtime — and it means screen-reader users hear their own voice, not a second one.
-The DLL is NVDA's freely-redistributable controller client; grab it from the NVDA
-"controllerClient" package (or copy the one shipped by apps like TeamTalk). If it
-is absent, or no screen reader is running, NUtils falls back to the built-in
-**Windows Speech API (SAPI)** so speech still works (just in the Windows TTS voice).
+There are two speech backends, and which one you get is a build-time choice.
 
-To route speech through Prism instead (which additionally supports JAWS/ZoomText),
-build with the `speech` feature:
+### Prism (what CI ships) — `--features speech`
 
-```sh
-cargo build --release -p nutils --features speech
+Prism implements NVDA's RPC protocol itself, so `nutils.exe` speaks through NVDA
+with **no DLL beside it** — a lone exe copied to another machine still talks. It
+also covers JAWS, ZoomText, UI Automation, OneCore, ZDSR and PC-Talker. This is
+what the CI artifact is built with, and what you want when you distribute a
+single file.
+
+```powershell
+.\scripts\build-speech.ps1           # all backends
+.\scripts\build-speech.ps1 -NoAtl    # skip the four backends that need ATL
 ```
 
-That build additionally needs, on top of the base requirements:
+The script sets what the build needs: `PRISM_STATIC=1` (link Prism in rather
+than as a `prism.dll`) and `CMAKE_TOOLCHAIN_FILE` pointing at `cmake/prism.cmake`,
+which forces Prism's native build onto the **static** MSVC CRT. That last part
+matters: `.cargo/config.toml` builds with `+crt-static` while `prism-sys` pins
+`MultiThreadedDLL`, and mixing them fails the final link on unresolved
+`__imp__wassert` / `__imp__dtest`.
 
-- **CMake** and **libclang** (as for the settings crate).
+On top of the base requirements it needs:
+
+- **CMake** (as for the settings crate; libclang is *not* needed — `prism-sys`
+  ships pregenerated bindings).
 - The Visual Studio **"C++ ATL for latest build tools"** component (provides
-  `atlbase.h`, needed by Prism's JAWS/SAPI/ZoomText backends), installable with:
+  `atlbase.h`, needed by Prism's SAPI, JAWS, ZoomText and Sense Reader
+  backends), installable with:
   ```
   "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" modify ^
     --installPath "C:\Program Files\Microsoft Visual Studio\2022\Community" ^
     --add Microsoft.VisualStudio.Component.VC.ATL --quiet --norestart
   ```
-  (needs administrator rights).
+  (needs administrator rights). Without it, use `-NoAtl`: NVDA, UI Automation,
+  OneCore, ZDSR and PC-Talker are still built, and you give up JAWS, ZoomText and
+  Prism's SAPI fallback (OneCore covers machines with no screen reader).
 
-To type-check the Prism speech path without building the native library
-(no ATL needed):
+To type-check the Prism path without building the native library at all:
 
 ```sh
 PRISM_SYS_NO_NATIVE=1 cargo check -p nutils --features speech
 ```
+
+### The default build — NVDA controller client, else SAPI
+
+A plain `cargo build --release` needs no C++ toolchain at all. It loads
+`nvdaControllerClient64.dll` at runtime to speak through **NVDA**, and falls back
+to the built-in **Windows Speech API (SAPI)** when that DLL is missing or no
+screen reader is running.
+
+The catch is that the DLL must sit next to `nutils.exe` — copy the exe alone to
+another machine and speech silently drops to SAPI even with NVDA running. The DLL
+is NVDA's freely-redistributable controller client; grab it from the NVDA
+"controllerClient" package (or copy the one shipped by apps like TeamTalk).
 
 ## Antivirus / distribution notes
 

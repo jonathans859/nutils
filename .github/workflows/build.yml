@@ -30,6 +30,17 @@ jobs:
       - name: Test
         run: cargo test --release -p nutils
 
+      # The shipped nutils.exe speaks through Prism, which implements NVDA's RPC
+      # protocol itself -- so the artifact needs no nvdaControllerClient64.dll
+      # beside it. cmake/prism.cmake pins Prism to the static CRT to match this
+      # repo's +crt-static; PRISM_STATIC=1 links Prism in rather than as a DLL.
+      # This overwrites the nutils.exe built above, which is what we ship.
+      - name: Build nutils with Prism speech
+        env:
+          PRISM_STATIC: "1"
+          CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}\cmake\prism.cmake
+        run: cargo build --release -p nutils --features speech
+
       # The settings editor builds wxWidgets from source: needs CMake (preinstalled
       # on the runner), Ninja, and libclang for bindgen. LLVM is preinstalled at
       # C:\Program Files\LLVM.
