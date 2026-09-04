@@ -170,10 +170,14 @@ always-running core stays a ~0.5 MB native process.
 
 ## Configuration
 
-Configuration is a single `config.toml` at `%APPDATA%\NUtils\config.toml`, created
-with defaults on first run. If legacy `hotkeys.ini` / `settings.ini` /
-`WinMurderer.ini` files are found next to the executable on first run, they are
-migrated automatically. See the sample [`config.toml`](config.toml) for every
+Configuration is a single `config.toml` **next to `nutils.exe`**, created with
+defaults on first run: NUtils is portable, so the app and everything it writes
+(`config.toml`, `state.toml`) live in one folder you can copy to a stick. Only if
+that folder is read-only — installed under `Program Files`, say — does it fall
+back to `%APPDATA%\NUtils\`, so an installed copy still saves its settings. A
+config left in `%APPDATA%\NUtils` by an earlier version is moved next to the exe
+on first run. If legacy `hotkeys.ini` / `settings.ini` / `WinMurderer.ini` files
+are found next to the executable on first run, they are migrated automatically. See the sample [`config.toml`](config.toml) for every
 option, including hotkey syntax, the WinMurderer `[[rules]]` list, and
 `[[managed_apps]]`.
 

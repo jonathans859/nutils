@@ -1,5 +1,6 @@
-# NUtils configuration (sample). At runtime the live copy lives at
-# %APPDATA%\NUtils\config.toml and is created automatically on first run.
+# NUtils configuration (sample). At runtime the live copy sits next to
+# nutils.exe and is created automatically on first run. (If the program's folder
+# is read-only, it falls back to %APPDATA%\NUtils\config.toml instead.)
 #
 # Hotkey syntax: ^ = Ctrl, + = Shift, # = Win, ! = Alt; named keys in braces
 # like {f4}, {esc}. "bass" is the modifier prefix held with a digit 1..0 to

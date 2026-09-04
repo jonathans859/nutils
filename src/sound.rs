@@ -11,11 +11,7 @@ const TONE_AMP: f32 = 0.20;
 const TONE_RATE: u32 = 22_050;
 
 fn sounds_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("sounds")
+    crate::config::exe_dir().join("sounds")
 }
 
 pub fn beep(freq: u32, dur_ms: u32) {

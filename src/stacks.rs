@@ -34,11 +34,10 @@ fn boot_epoch() -> i64 {
     now - uptime_secs
 }
 
+/// `state.toml` beside the executable, like the config -- a portable copy keeps
+/// everything it writes in its own folder. See [`crate::config::portable_path`].
 fn state_path() -> PathBuf {
-    if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        return PathBuf::from(local).join("NUtils").join("state.toml");
-    }
-    PathBuf::from("state.toml")
+    crate::config::portable_path("state.toml", "LOCALAPPDATA")
 }
 
 impl Stacks {

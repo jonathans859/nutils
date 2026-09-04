@@ -170,18 +170,95 @@ pub struct Config {
     pub managed_apps: Vec<ManagedApp>,
 }
 
-impl Config {
-    /// `%APPDATA%\NUtils\config.toml`, falling back to the executable's directory.
-    pub fn config_path() -> PathBuf {
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            return Path::new(&appdata).join("NUtils").join("config.toml");
+/// The folder `nutils.exe` (or `nutils-settings.exe`) lives in.
+pub fn exe_dir() -> PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Whether we may create files in `dir` -- tested by actually creating one, since
+/// Windows ACLs and folder virtualisation make anything else guesswork.
+fn dir_is_writable(dir: &Path) -> bool {
+    let probe = dir.join(".nutils-write-probe");
+    match std::fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            true
         }
-        PathBuf::from("config.toml")
+        Err(_) => false,
+    }
+}
+
+/// Where NUtils keeps `file`, portable-first: **next to the executable**, so the
+/// whole app -- exe, sounds, settings -- travels in one folder on a stick.
+///
+/// Only when that folder is read-only (installed under `Program Files`, run from
+/// read-only media) does it fall back to the per-user directory named by `var`
+/// (`APPDATA` for the config, `LOCALAPPDATA` for throwaway state), so an installed
+/// copy still keeps its settings instead of silently failing to save.
+///
+/// The choice is made once: `config_path` is polled every second for live reload,
+/// and probing the filesystem that often would be wasteful.
+pub fn portable_path(file: &str, var: &str) -> PathBuf {
+    use std::sync::OnceLock;
+    static PORTABLE: OnceLock<bool> = OnceLock::new();
+    let dir = exe_dir();
+    if *PORTABLE.get_or_init(|| dir_is_writable(&dir)) {
+        return dir.join(file);
+    }
+    match std::env::var(var) {
+        Ok(base) => Path::new(&base).join("NUtils").join(file),
+        Err(_) => PathBuf::from(file),
+    }
+}
+
+impl Config {
+    /// `config.toml` beside the executable; see [`portable_path`].
+    pub fn config_path() -> PathBuf {
+        portable_path("config.toml", "APPDATA")
     }
 
-    /// Load config, creating a default file (or migrating legacy `.ini`s) on first run.
+    /// The pre-portable location, kept only so an existing config can be moved out.
+    fn appdata_config_path() -> Option<PathBuf> {
+        std::env::var("APPDATA")
+            .ok()
+            .map(|a| Path::new(&a).join("NUtils").join("config.toml"))
+    }
+
+    /// Move a config left in `%APPDATA%\NUtils` by an earlier version next to the
+    /// executable, so upgrading doesn't quietly reset every setting. The old file
+    /// is deleted on success -- a portable app should leave nothing behind -- and
+    /// the `NUtils` folder with it if that empties it.
+    fn adopt_appdata_config(dest: &Path) -> Option<Config> {
+        let legacy = Self::appdata_config_path()?;
+        if legacy == dest {
+            return None;
+        }
+        let text = std::fs::read_to_string(&legacy).ok()?;
+        let cfg = toml::from_str::<Config>(&text).ok()?;
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).ok()?;
+        }
+        std::fs::write(dest, &text).ok()?;
+        if std::fs::remove_file(&legacy).is_ok() {
+            if let Some(dir) = legacy.parent() {
+                let _ = std::fs::remove_dir(dir); // only succeeds once empty
+            }
+        }
+        Some(cfg)
+    }
+
+    /// Load config, creating a default file on first run -- adopting one from an
+    /// older install location, or migrating legacy `.ini`s, when either exists.
     pub fn load_or_init() -> Config {
         let path = Self::config_path();
+        if !path.exists() {
+            if let Some(cfg) = Self::adopt_appdata_config(&path) {
+                return cfg;
+            }
+        }
         if let Ok(text) = std::fs::read_to_string(&path) {
             match toml::from_str::<Config>(&text) {
                 Ok(cfg) => return cfg,
