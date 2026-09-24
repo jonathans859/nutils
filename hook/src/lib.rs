@@ -17,12 +17,48 @@
 //! The window stays a real, fully screen-reader-readable window; it is only
 //! visually transparent. Child *controls* (buttons, edits, …) are skipped.
 
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, WPARAM};
+use windows::core::{w, PCWSTR};
+use windows::Win32::Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, GetWindowLongPtrW, SetLayeredWindowAttributes, SetWindowLongPtrW, CWPSTRUCT,
-    GWL_EXSTYLE, GWL_STYLE, HC_ACTION, LWA_ALPHA, WM_CREATE, WM_SHOWWINDOW, WM_WINDOWPOSCHANGING,
-    WS_CHILD, WS_EX_LAYERED,
+    CallNextHookEx, GetLayeredWindowAttributes, GetPropW, GetWindowLongPtrW,
+    SetLayeredWindowAttributes, SetPropW, SetWindowLongPtrW, CWPSTRUCT, GWL_EXSTYLE, GWL_STYLE,
+    HC_ACTION, LAYERED_WINDOW_ATTRIBUTES_FLAGS, LWA_ALPHA, WM_CREATE, WM_SHOWWINDOW,
+    WM_WINDOWPOSCHANGING, WS_CHILD, WS_EX_LAYERED,
 };
+
+// The window's original layered state, so NUtils can restore it when the app
+// stops being auto-transparent. Must match the encoding in NUtils' window.rs.
+const ORIG_PROP: PCWSTR = w!("NUtils.Original");
+const ORIG_KEY_PROP: PCWSTR = w!("NUtils.OriginalKey");
+const ORIG_SET: usize = 1;
+const ORIG_LAYERED: usize = 2;
+const ORIG_ATTRS: usize = 4;
+
+/// Record the window's layered state, unless it is already recorded.
+unsafe fn record_original(hwnd: HWND, ex: isize) {
+    if !GetPropW(hwnd, ORIG_PROP).0.is_null() {
+        return;
+    }
+    let mut value = ORIG_SET;
+    if ex & WS_EX_LAYERED.0 as isize != 0 {
+        let (mut key, mut alpha, mut flags) = (COLORREF(0), 0u8, LAYERED_WINDOW_ATTRIBUTES_FLAGS(0));
+        let attrs =
+            GetLayeredWindowAttributes(hwnd, Some(&mut key), Some(&mut alpha), Some(&mut flags)).is_ok();
+        if attrs && flags.contains(LWA_ALPHA) && alpha == 0 {
+            // Already transparent with no record: NUtils' own watcher got here
+            // first. Leave the original as "not layered", i.e. drawn normally.
+            let _ = SetPropW(hwnd, ORIG_PROP, Some(HANDLE(value as *mut core::ffi::c_void)));
+            return;
+        }
+        value |= ORIG_LAYERED;
+        if attrs {
+            value |= ORIG_ATTRS | (alpha as usize) << 8 | (flags.0 as usize) << 16;
+            let key = HANDLE((key.0 as usize + 1) as *mut core::ffi::c_void);
+            let _ = SetPropW(hwnd, ORIG_KEY_PROP, Some(key));
+        }
+    }
+    let _ = SetPropW(hwnd, ORIG_PROP, Some(HANDLE(value as *mut core::ffi::c_void)));
+}
 
 /// Make a top-level window transparent (alpha 0). No-op for child controls.
 ///
@@ -37,6 +73,7 @@ unsafe fn hide_if_window(hwnd: HWND) {
         return; // a child control (button/edit/…), not a window we hide
     }
     let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    record_original(hwnd, ex);
     let layered = WS_EX_LAYERED.0 as isize;
     if ex & layered == 0 {
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | layered);

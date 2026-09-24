@@ -1,5 +1,5 @@
 //! Parse the legacy NUtils hotkey syntax into modifier flags + a virtual-key code,
-//! and manage `RegisterHotKey` registrations.
+//! for `RegisterHotKey`.
 //!
 //! Syntax: a prefix of modifier chars (`^`=Ctrl, `+`=Shift, `#`=Win, `!`=Alt)
 //! followed by a single key. The key is either a literal character (`t`, `\`, digit)
@@ -109,11 +109,6 @@ pub fn parse(spec: &str) -> Option<Hotkey> {
     Some(Hotkey { mods, vk })
 }
 
-/// Parse a "bass" prefix + a suffix key, e.g. bass `"^+"` and suffix `"1"` or `"{f4}"`.
-pub fn parse_with_suffix(bass: &str, suffix: &str) -> Option<Hotkey> {
-    parse(&format!("{bass}{suffix}"))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,7 +130,7 @@ mod tests {
 
     #[test]
     fn parses_ctrl_shift_digit() {
-        let hk = parse_with_suffix("^+", "1").unwrap();
+        let hk = parse("^+1").unwrap();
         assert_eq!(hk.vk, b'1' as u32);
     }
 

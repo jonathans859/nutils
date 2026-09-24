@@ -80,7 +80,8 @@ nutils_hook.dll             (the in-process auto-hide helper; MUST sit next to n
 nvdaControllerClient64.dll  (default builds only; a Prism build speaks to NVDA on its own)
 nutils-settings.exe         (the settings editor, launched from the tray)
 sounds\                     (optional WAV sound pack; PC-speaker beeps used if absent)
-config.toml                 (written here on first run; portable, beside the exe)
+config.toml                 (the settings; written here on first run)
+state.toml                  (auto-transparent apps and hidden windows; written by NUtils)
 ```
 
 If `nutils_hook.dll` is missing, NUtils still runs and still auto-hides managed
@@ -90,12 +91,10 @@ in-process path (new windows may flash for a frame before being hidden).
 `nutils-settings.exe` must sit next to `nutils.exe` so the tray "Settings…" item
 can find it.
 
-At first run NUtils writes a default `config.toml` **next to the executable** and
-keeps `state.toml` there too, so the whole app is portable. If that folder is not
-writable it falls back to `%APPDATA%\NUtils\` (config) and `%LOCALAPPDATA%\NUtils\`
-(state). A config left in `%APPDATA%\NUtils` by an earlier version is moved beside
-the exe on first run, and any legacy `hotkeys.ini` / `settings.ini` /
-`WinMurderer.ini` found next to the executable is migrated.
+NUtils is portable: `config.toml` (settings, written only by the user and the
+settings editor) and `state.toml` (written by NUtils as it runs) always sit
+**next to the executable**, so its folder must be writable. There is no
+fallback to `%APPDATA%`.
 
 ## Spoken feedback
 

@@ -7,13 +7,16 @@ mod inject;
 mod murderer;
 mod sound;
 mod stacks;
+mod state;
 mod status;
 mod tray;
 mod ui;
+mod visual;
 mod window;
 mod winevent;
 
-use config::{Config, ManagedApp, MatchKind};
+use config::{Config, MatchKind};
+use state::ManagedApp;
 use stacks::{human_to_slot, Stacks, STACK_SIZE};
 use std::cell::RefCell;
 use tray::MenuChoice;
@@ -46,6 +49,8 @@ struct App {
     hwnd: HWND,
     cfg: Config,
     stacks: Stacks,
+    /// Apps whose windows are made transparent automatically (kept in state.toml).
+    managed_apps: Vec<ManagedApp>,
     _tray: tray::Tray,
     hook: winevent::HookThread,
     fb: feedback::Feedback,
@@ -54,6 +59,9 @@ struct App {
     /// auto-transparent hotkeys never undo it, and stopping auto-transparent
     /// leaves these windows transparent. Pruned on the timer tick.
     manual_transparent: std::collections::HashSet<window::WinId>,
+    /// Windows of auto-transparent apps that could not be made transparent, so
+    /// each is announced once rather than on every timer tick.
+    auto_failed: std::collections::HashSet<window::WinId>,
     /// Last-seen modification time of config.toml, for change-driven reloads.
     config_mtime: Option<std::time::SystemTime>,
 }
@@ -78,7 +86,8 @@ fn main() {
     }
 
     let cfg = Config::load_or_init();
-    let stacks = Stacks::load();
+    let state = state::State::load();
+    let stacks = Stacks::from_saved(state.hidden.as_ref());
 
     let instance = unsafe { GetModuleHandleW(None).unwrap_or_default() };
     let class = w!("NUtilsMainWnd");
@@ -112,14 +121,14 @@ fn main() {
         .expect("create message window")
     };
 
-    winevent::set_managed(&cfg.managed_apps);
+    winevent::set_managed(&state.managed_apps);
     let hook = winevent::install();
     // Inject the in-process helper into any already-running managed app, so its
     // *new* windows are hidden with no flash. Also hide the windows it has open now.
     for w in window::enum_top_windows() {
         if winevent::is_managed_window(w) {
             inject::ensure(w);
-            window::set_alpha(w, 0);
+            window::make_transparent(w);
         }
     }
     let tray = tray::Tray::new(hwnd);
@@ -129,10 +138,12 @@ fn main() {
         hwnd,
         cfg,
         stacks,
+        managed_apps: state.managed_apps,
         _tray: tray,
         hook,
         fb,
         manual_transparent: std::collections::HashSet::new(),
+        auto_failed: std::collections::HashSet::new(),
         config_mtime: config_mtime(),
     };
     app.set_hotkeys(true);
@@ -208,8 +219,8 @@ impl App {
         match id {
             HK_DIGIT_BASE..=10 => self.toggle_slot((id - HK_DIGIT_BASE) as u32),
             HK_PRIO_BASE..=16 => self.set_priority((id - HK_PRIO_BASE) as usize),
-            HK_TRANSPARENT => self.set_transparent(0),
-            HK_SOLID => self.set_transparent(255),
+            HK_TRANSPARENT => self.set_transparent(true),
+            HK_SOLID => self.set_transparent(false),
             HK_FIRSTAVAIL => self.hide_in_first(),
             HK_WINKILL => self.kill_active(),
             HK_STACKUP => self.stack_shift(true),
@@ -234,26 +245,26 @@ impl App {
             return;
         }
         let hk = &self.cfg.hotkeys;
-        let reg = |id: i32, spec: &str| {
+        let register = |id: i32, spec: &str| {
             if let Some(k) = hotkeys::parse(spec) {
                 unsafe {
                     let _ = RegisterHotKey(h, id, k.mods, k.vk);
                 }
             }
         };
-        for d in 0..10u32 {
-            if let Some(k) = hotkeys::parse_with_suffix(&hk.bass, &d.to_string()) {
-                unsafe {
-                    let _ = RegisterHotKey(h, HK_DIGIT_BASE + d as i32, k.mods, k.vk);
-                }
+        let reg = |id: i32, binding: &str| {
+            if let Some(spec) = hk.resolve(binding) {
+                register(id, &spec);
+            }
+        };
+        if let Some(mods) = hk.slot_mods() {
+            for d in 0..10i32 {
+                register(HK_DIGIT_BASE + d, &format!("{mods}{d}"));
             }
         }
-        for i in 0..6i32 {
-            let suffix = format!("{{f{}}}", i + 3);
-            if let Some(k) = hotkeys::parse_with_suffix(&hk.bass, &suffix) {
-                unsafe {
-                    let _ = RegisterHotKey(h, HK_PRIO_BASE + i, k.mods, k.vk);
-                }
+        if let Some(mods) = hk.priority_mods() {
+            for i in 0..6i32 {
+                register(HK_PRIO_BASE + i, &format!("{mods}{{f{}}}", i + 3));
             }
         }
         reg(HK_CHTITLE, &hk.chtitle);
@@ -291,7 +302,7 @@ impl App {
             self.fb.window_down();
         }
         self.stacks.prune();
-        self.stacks.save();
+        self.save_state();
     }
 
     fn hide_in_first(&mut self) {
@@ -305,7 +316,7 @@ impl App {
         self.stacks.set(slot, to_id(hwnd));
         self.fb.window_down();
         self.stacks.prune();
-        self.stacks.save();
+        self.save_state();
     }
 
     /// Per-window transparency (Win+Shift+\ and Win+Shift+/).
@@ -314,20 +325,48 @@ impl App {
     /// owned by the auto-transparent machinery — the in-process helper and the
     /// window-event watcher would just re-apply it — so the two must not fight.
     /// Stop auto-transparenting the app first.
-    fn set_transparent(&mut self, alpha: u8) {
+    fn set_transparent(&mut self, transparent: bool) {
         let hwnd = root(window::foreground());
         if winevent::is_managed_window(hwnd) {
             self.fb.managed_blocked();
             return;
         }
-        window::set_alpha(hwnd, alpha);
-        if alpha == 0 {
-            self.manual_transparent.insert(to_id(hwnd));
-            self.fb.transparent();
+        if transparent {
+            if self.make_transparent_checked(hwnd) {
+                self.manual_transparent.insert(to_id(hwnd));
+                self.fb.transparent();
+            }
         } else {
             self.manual_transparent.remove(&to_id(hwnd));
-            self.fb.solid();
+            if window::make_solid(hwnd) {
+                self.fb.solid();
+            } else {
+                self.fb.solid_failed();
+            }
         }
+    }
+
+    /// Make the active window transparent for a hotkey, and confirm it: Windows
+    /// must accept the change and, with the visual check on, the screen must show
+    /// it. On failure the window is left as it was and the reason is announced.
+    fn make_transparent_checked(&mut self, hwnd: HWND) -> bool {
+        // Only compare the screen for a window that is drawn now: one that's
+        // already transparent shows what's behind it before *and* after.
+        let before = if self.cfg.settings.visual_check && !window::is_transparent(hwnd) {
+            visual::snapshot(hwnd)
+        } else {
+            None
+        };
+        if !window::make_transparent(hwnd) {
+            self.fb.transparent_failed();
+            return false;
+        }
+        if before.is_some_and(|b| visual::compare(&b) == visual::Seen::StillVisible) {
+            window::make_solid(hwnd);
+            self.fb.still_visible();
+            return false;
+        }
+        true
     }
 
     fn kill_active(&mut self) {
@@ -390,7 +429,7 @@ impl App {
         self.stacks.clear(slot);
         self.fb.window_up();
         self.stacks.prune();
-        self.stacks.save();
+        self.save_state();
     }
 
     /// Launch the wxWidgets settings editor (a sibling `nutils-settings.exe`).
@@ -414,12 +453,20 @@ impl App {
         self.set_hotkeys(true);
     }
 
+    /// Write `state.toml`: the auto-transparent apps and the hidden windows.
+    fn save_state(&self) {
+        state::State {
+            managed_apps: self.managed_apps.clone(),
+            hidden: Some(self.stacks.to_saved()),
+        }
+        .save();
+    }
+
     /// Reload configuration and language in place (no process restart), keeping
     /// currently-hidden windows.
     fn reload(&mut self) {
         self.set_hotkeys(false);
         self.cfg = Config::load_or_init();
-        winevent::set_managed(&self.cfg.managed_apps);
         self.fb.set_mode(self.cfg.settings.feedback);
         self.config_mtime = config_mtime();
         self.set_hotkeys(true);
@@ -431,24 +478,28 @@ impl App {
         self.set_hotkeys(false);
         let active = root(window::foreground());
         if let Some(exe) = window::owner_exe(active) {
+            // Try the window that's active now first: if it can't be made
+            // transparent (an app running as administrator, or one that is drawn
+            // regardless), the app's other windows can't either, so don't add it.
+            if !self.make_transparent_checked(active) {
+                self.set_hotkeys(true);
+                return;
+            }
             let already = self
-                .cfg
                 .managed_apps
                 .iter()
                 .any(|a| a.match_kind == MatchKind::Exe && a.value.eq_ignore_ascii_case(&exe));
             if !already {
-                self.cfg.managed_apps.push(ManagedApp {
+                self.managed_apps.push(ManagedApp {
                     match_kind: MatchKind::Exe,
                     value: exe.clone(),
                 });
-                let _ = self.cfg.save();
-                self.config_mtime = config_mtime();
-                winevent::set_managed(&self.cfg.managed_apps);
+                self.save_state();
+                winevent::set_managed(&self.managed_apps);
             }
             // Inject the in-process helper so this app's *future* windows are born
-            // transparent (zero flash), then cloak the window that's active now.
+            // transparent (zero flash).
             inject::ensure(active);
-            window::set_alpha(active, 0);
             self.fb.managed(&exe);
         }
         self.set_hotkeys(true);
@@ -465,26 +516,27 @@ impl App {
         self.set_hotkeys(false);
         let active = root(window::foreground());
         if let Some(exe) = window::owner_exe(active) {
-            let before = self.cfg.managed_apps.len();
-            self.cfg
-                .managed_apps
+            let before = self.managed_apps.len();
+            self.managed_apps
                 .retain(|a| !(a.match_kind == MatchKind::Exe && a.value.eq_ignore_ascii_case(&exe)));
-            if self.cfg.managed_apps.len() == before {
+            if self.managed_apps.len() == before {
                 self.fb.not_managed();
                 self.set_hotkeys(true);
                 return;
             }
-            let _ = self.cfg.save();
-            self.config_mtime = config_mtime();
-            winevent::set_managed(&self.cfg.managed_apps);
+            self.save_state();
+            winevent::set_managed(&self.managed_apps);
             // Stop the in-process helper FIRST, so it can't re-transparent windows,
-            // then make every window this app currently owns solid again.
+            // then make every window this app currently owns solid again. Windows
+            // NUtils never made transparent are left alone by make_solid.
             inject::uninstall_owner(active);
             for w in window::enum_top_windows() {
-                if window::owner_exe(w).as_deref() == Some(exe.as_str())
-                    && !self.manual_transparent.contains(&to_id(w))
-                {
-                    window::set_alpha(w, 255);
+                if window::owner_exe(w).as_deref() != Some(exe.as_str()) {
+                    continue;
+                }
+                self.auto_failed.remove(&to_id(w));
+                if !self.manual_transparent.contains(&to_id(w)) {
+                    window::make_solid(w);
                 }
             }
             self.fb.unmanaged(&exe);
@@ -511,6 +563,40 @@ impl App {
 
     // ---- timer & api ------------------------------------------------------
 
+    /// Check that every window NUtils made transparent still is, and re-apply it
+    /// where it has been undone: some apps reset their own layered style, or
+    /// rebuild a window, and would otherwise reappear while NUtils still believes
+    /// they're transparent. A window that can't be made transparent again is
+    /// announced once, so the user knows it is visible.
+    fn keep_transparent(&mut self) {
+        let mut lost = Vec::new();
+        self.manual_transparent.retain(|&id| {
+            let h = from_id(id);
+            if !window::exists(h) {
+                return false;
+            }
+            if window::is_transparent(h) || window::make_transparent(h) {
+                return true;
+            }
+            lost.push(h);
+            false
+        });
+        self.auto_failed.retain(|&id| window::exists(from_id(id)));
+        for w in window::enum_top_windows() {
+            if !window::is_visible(w) || window::is_transparent(w) || !winevent::is_managed_window(w) {
+                continue;
+            }
+            if window::make_transparent(w) {
+                inject::ensure(w);
+            } else if self.auto_failed.insert(to_id(w)) {
+                lost.push(w);
+            }
+        }
+        for h in lost {
+            self.fb.transparency_lost(&window::get_title(h));
+        }
+    }
+
     /// Purge slots whose windows vanished or were restored elsewhere, then run
     /// the WinMurderer sweep.
     fn on_timer(&mut self) {
@@ -529,9 +615,9 @@ impl App {
         }
         if changed {
             self.stacks.prune();
-            self.stacks.save();
+            self.save_state();
         }
-        self.manual_transparent.retain(|&id| window::exists(from_id(id)));
+        self.keep_transparent();
         murderer::sweep(&self.cfg.rules);
 
         // Live-reload if the settings editor (or a manual edit) changed config.toml.

@@ -29,7 +29,8 @@
 //! rejected cross-process (E_ACCESSDENIED). So this is as tight as it gets from
 //! our own process; the residual is at most one frame, only for force-painting apps.
 
-use crate::config::{ManagedApp, MatchKind};
+use crate::config::MatchKind;
+use crate::state::ManagedApp;
 use crate::inject;
 use crate::window;
 use std::collections::HashMap;
@@ -142,7 +143,8 @@ unsafe extern "system" fn proc(
         // Make it transparent now, while it may still be hidden. This is the
         // cross-process fallback and may still let a single frame through for an
         // app that force-paints on show.
-        window::set_alpha(hwnd, 0);
+        // A refusal is reported by the timer check in main.rs, not here.
+        window::make_transparent(hwnd);
         // Ensure the in-process helper is injected into this app, so its *next*
         // windows are born transparent with no flash at all.
         inject::ensure(hwnd);

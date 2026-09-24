@@ -1,8 +1,7 @@
-//! Configuration: modern TOML config with one-time migration from the legacy
-//! `hotkeys.ini` / `settings.ini` / `WinMurderer.ini` files.
+//! Configuration: `config.toml`, shared by the core and the settings editor.
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// How a managed-app / rule pattern is matched against a window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,13 +31,25 @@ pub enum Degree {
     Kill,
 }
 
-/// Hotkey bindings. Values use the original NUtils modifier syntax so existing
-/// muscle memory carries over: `^`=Ctrl, `+`=Shift, `#`=Win, `!`=Alt, and
-/// `{f4}` / `{esc}` for named keys.
+/// Hotkey bindings, in NUtils' modifier syntax: `^`=Ctrl, `+`=Shift, `#`=Win,
+/// `!`=Alt, then a key such as `t`, `\` or a braced name like `{f4}`.
+///
+/// Every shortcut uses the `base` modifiers unless it names its own. An action's
+/// binding is one of:
+/// - a bare key (`"t"`): base + that key — the default for every action;
+/// - modifiers and a key (`"^+t"`): its own shortcut, ignoring the base;
+/// - empty (`""`): no shortcut.
+///
+/// The slot keys (1–0) and priority keys (F3–F8) are fixed; only their modifiers
+/// can be changed: left out means the base, `""` turns them off.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Hotkeys {
-    /// Base modifiers held with a digit 1-0 to hide/unhide that slot.
-    pub bass: String,
+    pub base: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub slots: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub priority: Option<String>,
     pub stackdown: String,
     pub stackup: String,
     pub chtitle: String,
@@ -47,41 +58,67 @@ pub struct Hotkeys {
     pub firstavailhide: String,
     pub winkill: String,
     /// Add the active window's app to the auto-transparent list.
-    #[serde(default = "default_manageapp")]
     pub manageapp: String,
     /// Stop auto-transparenting the active window's app (and make it solid again).
-    #[serde(default = "default_unmanageapp")]
     pub unmanageapp: String,
     /// Speak how many windows are hidden in how many stacks.
-    #[serde(default = "default_status")]
     pub status: String,
-}
-
-fn default_manageapp() -> String {
-    "#+a".into()
-}
-fn default_unmanageapp() -> String {
-    "#+s".into()
-}
-fn default_status() -> String {
-    "#+i".into()
 }
 
 impl Default for Hotkeys {
     fn default() -> Self {
         Hotkeys {
-            bass: "^+".into(),
-            stackdown: "^+-".into(),
-            stackup: "^+=".into(),
-            chtitle: "#+t".into(),
-            transparent: "#+\\".into(),
-            solid: "#+/".into(),
-            firstavailhide: "#+h".into(),
-            winkill: "#{f4}".into(),
-            manageapp: "#+a".into(),
-            unmanageapp: "#+s".into(),
-            status: "#+i".into(),
+            base: "!+".into(),
+            slots: None,
+            priority: None,
+            stackdown: "-".into(),
+            stackup: "=".into(),
+            chtitle: "t".into(),
+            transparent: "\\".into(),
+            solid: "/".into(),
+            firstavailhide: "h".into(),
+            winkill: "{f4}".into(),
+            manageapp: "a".into(),
+            unmanageapp: "s".into(),
+            status: "i".into(),
         }
+    }
+}
+
+/// Whether a binding names its own modifiers (and so ignores the base).
+pub fn has_modifiers(spec: &str) -> bool {
+    spec.starts_with(['^', '+', '#', '!'])
+}
+
+impl Hotkeys {
+    /// The full shortcut an action binding stands for, or `None` for no shortcut.
+    /// A bare key needs a base with at least one modifier, so NUtils never grabs
+    /// a plain key from every app.
+    pub fn resolve(&self, binding: &str) -> Option<String> {
+        if binding.is_empty() {
+            None
+        } else if has_modifiers(binding) {
+            Some(binding.to_string())
+        } else if has_modifiers(&self.base) {
+            Some(format!("{}{}", self.base, binding))
+        } else {
+            None
+        }
+    }
+
+    /// Modifiers held with the slot keys 1–0, or `None` when they are off.
+    pub fn slot_mods(&self) -> Option<&str> {
+        Self::fixed_key_mods(self.slots.as_deref(), &self.base)
+    }
+
+    /// Modifiers held with the priority keys F3–F8, or `None` when they are off.
+    pub fn priority_mods(&self) -> Option<&str> {
+        Self::fixed_key_mods(self.priority.as_deref(), &self.base)
+    }
+
+    fn fixed_key_mods<'a>(own: Option<&'a str>, base: &'a str) -> Option<&'a str> {
+        let mods = own.unwrap_or(base);
+        has_modifiers(mods).then_some(mods)
     }
 }
 
@@ -124,6 +161,11 @@ pub struct Settings {
     /// and title; `false` = it announces only the counts.
     #[serde(default)]
     pub detailed_status: bool,
+    /// `true` = when a hotkey makes a window transparent, also compare the screen
+    /// before and after, to catch windows that stay drawn anyway. Needs Screen
+    /// Curtain off; with it on the check is skipped.
+    #[serde(default)]
+    pub visual_check: bool,
 }
 
 fn default_true() -> bool {
@@ -136,6 +178,7 @@ impl Default for Settings {
             stack_counter: true,
             feedback: FeedbackMode::Beeps,
             detailed_status: false,
+            visual_check: false,
         }
     }
 }
@@ -150,14 +193,6 @@ pub struct Rule {
     pub degree: Degree,
 }
 
-/// An application whose newly-shown windows are auto-made-transparent.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ManagedApp {
-    #[serde(default, rename = "match")]
-    pub match_kind: MatchKind,
-    pub value: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
@@ -166,8 +201,6 @@ pub struct Config {
     pub settings: Settings,
     #[serde(default)]
     pub rules: Vec<Rule>,
-    #[serde(default)]
-    pub managed_apps: Vec<ManagedApp>,
 }
 
 /// The folder `nutils.exe` (or `nutils-settings.exe`) lives in.
@@ -178,87 +211,16 @@ pub fn exe_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// Whether we may create files in `dir` -- tested by actually creating one, since
-/// Windows ACLs and folder virtualisation make anything else guesswork.
-fn dir_is_writable(dir: &Path) -> bool {
-    let probe = dir.join(".nutils-write-probe");
-    match std::fs::File::create(&probe) {
-        Ok(_) => {
-            let _ = std::fs::remove_file(&probe);
-            true
-        }
-        Err(_) => false,
-    }
-}
-
-/// Where NUtils keeps `file`, portable-first: **next to the executable**, so the
-/// whole app -- exe, sounds, settings -- travels in one folder on a stick.
-///
-/// Only when that folder is read-only (installed under `Program Files`, run from
-/// read-only media) does it fall back to the per-user directory named by `var`
-/// (`APPDATA` for the config, `LOCALAPPDATA` for throwaway state), so an installed
-/// copy still keeps its settings instead of silently failing to save.
-///
-/// The choice is made once: `config_path` is polled every second for live reload,
-/// and probing the filesystem that often would be wasteful.
-pub fn portable_path(file: &str, var: &str) -> PathBuf {
-    use std::sync::OnceLock;
-    static PORTABLE: OnceLock<bool> = OnceLock::new();
-    let dir = exe_dir();
-    if *PORTABLE.get_or_init(|| dir_is_writable(&dir)) {
-        return dir.join(file);
-    }
-    match std::env::var(var) {
-        Ok(base) => Path::new(&base).join("NUtils").join(file),
-        Err(_) => PathBuf::from(file),
-    }
-}
-
 impl Config {
-    /// `config.toml` beside the executable; see [`portable_path`].
+    /// `config.toml`, always beside the executable: NUtils is portable, so the
+    /// app and everything it keeps travel in one folder.
     pub fn config_path() -> PathBuf {
-        portable_path("config.toml", "APPDATA")
+        exe_dir().join("config.toml")
     }
 
-    /// The pre-portable location, kept only so an existing config can be moved out.
-    fn appdata_config_path() -> Option<PathBuf> {
-        std::env::var("APPDATA")
-            .ok()
-            .map(|a| Path::new(&a).join("NUtils").join("config.toml"))
-    }
-
-    /// Move a config left in `%APPDATA%\NUtils` by an earlier version next to the
-    /// executable, so upgrading doesn't quietly reset every setting. The old file
-    /// is deleted on success -- a portable app should leave nothing behind -- and
-    /// the `NUtils` folder with it if that empties it.
-    fn adopt_appdata_config(dest: &Path) -> Option<Config> {
-        let legacy = Self::appdata_config_path()?;
-        if legacy == dest {
-            return None;
-        }
-        let text = std::fs::read_to_string(&legacy).ok()?;
-        let cfg = toml::from_str::<Config>(&text).ok()?;
-        if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent).ok()?;
-        }
-        std::fs::write(dest, &text).ok()?;
-        if std::fs::remove_file(&legacy).is_ok() {
-            if let Some(dir) = legacy.parent() {
-                let _ = std::fs::remove_dir(dir); // only succeeds once empty
-            }
-        }
-        Some(cfg)
-    }
-
-    /// Load config, creating a default file on first run -- adopting one from an
-    /// older install location, or migrating legacy `.ini`s, when either exists.
+    /// Load config, creating a default file on first run.
     pub fn load_or_init() -> Config {
         let path = Self::config_path();
-        if !path.exists() {
-            if let Some(cfg) = Self::adopt_appdata_config(&path) {
-                return cfg;
-            }
-        }
         if let Ok(text) = std::fs::read_to_string(&path) {
             match toml::from_str::<Config>(&text) {
                 Ok(cfg) => return cfg,
@@ -269,130 +231,61 @@ impl Config {
             }
         }
 
-        // No TOML yet: migrate legacy ini files if any exist next to the exe.
-        let cfg = migrate_legacy().unwrap_or_default();
+        let cfg = Config::default();
         let _ = cfg.save();
         cfg
     }
 
     pub fn save(&self) -> std::io::Result<()> {
-        let path = Self::config_path();
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
         let text = toml::to_string_pretty(self)
             .unwrap_or_else(|_| "# failed to serialize config\n".into());
-        std::fs::write(path, text)
+        std::fs::write(Self::config_path(), text)
     }
 }
 
-/// Minimal INI reader for legacy migration: `section -> key -> value`.
-fn parse_ini(text: &str) -> Vec<(String, Vec<(String, String)>)> {
-    let mut sections: Vec<(String, Vec<(String, String)>)> = Vec::new();
-    let mut current = String::new();
-    sections.push((current.clone(), Vec::new()));
-    for raw in text.lines() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            current = line[1..line.len() - 1].to_string();
-            sections.push((current.clone(), Vec::new()));
-        } else if let Some((k, v)) = line.split_once('=') {
-            if let Some(sec) = sections.last_mut() {
-                sec.1.push((k.trim().to_string(), v.trim().to_string()));
-            }
-        }
-    }
-    sections
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn ini_get<'a>(
-    secs: &'a [(String, Vec<(String, String)>)],
-    section: &str,
-    key: &str,
-) -> Option<&'a str> {
-    secs.iter()
-        .find(|(name, _)| name.eq_ignore_ascii_case(section))
-        .and_then(|(_, kv)| {
-            kv.iter()
-                .find(|(k, _)| k.eq_ignore_ascii_case(key))
-                .map(|(_, v)| v.as_str())
-        })
-}
-
-/// Read legacy `hotkeys.ini` / `settings.ini` / `WinMurderer.ini` from the exe dir.
-fn migrate_legacy() -> Option<Config> {
-    let dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."));
-
-    let hk_path = dir.join("hotkeys.ini");
-    let set_path = dir.join("settings.ini");
-    let wm_path = dir.join("WinMurderer.ini");
-    if !hk_path.exists() && !set_path.exists() && !wm_path.exists() {
-        return None;
+    #[test]
+    fn bare_key_uses_the_base() {
+        let hk = Hotkeys::default();
+        assert_eq!(hk.resolve("t").as_deref(), Some("!+t"));
+        assert_eq!(hk.resolve("{f4}").as_deref(), Some("!+{f4}"));
     }
 
-    let mut cfg = Config::default();
-
-    if let Ok(t) = std::fs::read_to_string(&hk_path) {
-        let s = parse_ini(&t);
-        let g = |k: &str, d: &str| ini_get(&s, "hotkeys", k).unwrap_or(d).to_string();
-        cfg.hotkeys = Hotkeys {
-            bass: g("bass", &cfg.hotkeys.bass),
-            stackdown: g("stackdown", &cfg.hotkeys.stackdown),
-            stackup: g("stackup", &cfg.hotkeys.stackup),
-            chtitle: g("chtitle", &cfg.hotkeys.chtitle),
-            transparent: g("transparent", &cfg.hotkeys.transparent),
-            solid: g("solid", &cfg.hotkeys.solid),
-            firstavailhide: g("firstavailhide", &cfg.hotkeys.firstavailhide),
-            winkill: g("winkill", &cfg.hotkeys.winkill),
-            manageapp: g("manageapp", &cfg.hotkeys.manageapp),
-            unmanageapp: g("unmanageapp", &cfg.hotkeys.unmanageapp),
-            status: g("status", &cfg.hotkeys.status),
-        };
+    #[test]
+    fn own_modifiers_override_the_base() {
+        assert_eq!(Hotkeys::default().resolve("^+t").as_deref(), Some("^+t"));
     }
 
-    if let Ok(t) = std::fs::read_to_string(&set_path) {
-        let s = parse_ini(&t);
-        if let Some(sc) = ini_get(&s, "settings", "StackCounter") {
-            cfg.settings.stack_counter = sc.trim() != "0";
-        }
-        if let Some(ds) = ini_get(&s, "settings", "DetailedStatus") {
-            cfg.settings.detailed_status = ds.trim() != "0";
-        }
+    #[test]
+    fn empty_binding_or_empty_base_registers_nothing() {
+        let mut hk = Hotkeys::default();
+        assert_eq!(hk.resolve(""), None);
+        hk.base.clear();
+        assert_eq!(hk.resolve("t"), None, "never a bare key on its own");
+        assert_eq!(hk.resolve("#t").as_deref(), Some("#t"));
     }
 
-    if let Ok(t) = std::fs::read_to_string(&wm_path) {
-        let s = parse_ini(&t);
-        for (name, kv) in &s {
-            if name.is_empty() {
-                continue;
-            }
-            let title = kv
-                .iter()
-                .find(|(k, _)| k.eq_ignore_ascii_case("title"))
-                .map(|(_, v)| v.clone());
-            let degree = kv
-                .iter()
-                .find(|(k, _)| k.eq_ignore_ascii_case("degree"))
-                .map(|(_, v)| v.clone());
-            if let Some(title) = title {
-                let degree = match degree.as_deref() {
-                    Some("2") => Degree::Kill,
-                    _ => Degree::Close,
-                };
-                cfg.rules.push(Rule {
-                    match_kind: MatchKind::Title,
-                    value: title,
-                    degree,
-                });
-            }
-        }
+    #[test]
+    fn slot_and_priority_modifiers() {
+        let mut hk = Hotkeys::default();
+        assert_eq!(hk.slot_mods(), Some("!+"));
+        hk.slots = Some("^+".into());
+        hk.priority = Some(String::new());
+        assert_eq!(hk.slot_mods(), Some("^+"));
+        assert_eq!(hk.priority_mods(), None);
     }
 
-    Some(cfg)
+    #[test]
+    fn sample_config_matches_the_defaults() {
+        let sample: Config = toml::from_str(include_str!("../config.toml")).unwrap();
+        let (a, b) = (sample.hotkeys, Hotkeys::default());
+        assert_eq!(
+            toml::to_string(&a).unwrap(),
+            toml::to_string(&b).unwrap(),
+            "config.toml's [hotkeys] should show the built-in defaults"
+        );
+    }
 }

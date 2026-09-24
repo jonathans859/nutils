@@ -1,211 +1,109 @@
 # NUtils
 
-NUtils is a hotkey-controlled window manager for Windows, built with screen-reader
-users in mind. It hides, reveals, and cloaks windows on a keystroke so you can keep
-many things open without them cluttering your taskbar, Alt-Tab order, or screen.
+NUtils is a hotkey-driven window manager for Windows, built with screen-reader
+users in mind. It hides windows, brings them back, and makes them transparent
+with a keystroke, so you can keep lots of things open without them cluttering
+your taskbar, your Alt+Tab list or your screen.
 
-Originally written in AutoIt (2008–2010) by **Niko Carpenter** and **Tyler Spivey**.
-Version 4 is a ground-up rewrite in **Rust** on the native Win32 API — a single
-self-contained ~0.5 MB executable with no runtime or redistributable dependency.
-The original AutoIt 3 sources are not kept in the working tree; they remain in
-this repository's Git history, before the v4 rewrite (commit `9dd82cc` and
-earlier).
+It was originally written in AutoIt (2008–2010) by **Niko Carpenter** and
+**Tyler Spivey**. Version 4 is a complete rewrite in Rust on the native Win32
+API.
 
 ## Features
 
-- **Hide / unhide windows into 10 slots** with one keystroke (Ctrl+Shift+1…0).
-- **Stacks** — extra sets of 10 slots for when you need to hide more than ten
-  windows, or want to organize them; switch stacks with Ctrl+Shift+`=` / `-`.
-- **Make a window transparent** — invisible on screen but still fully interactable
-  through a screen reader (Win+Shift+`\`), and solid again (Win+Shift+`/`).
-- **Auto-transparent apps**: designate an application with **Win+Shift+A**; its
-  active window is made transparent at once and any new window or dialog it opens
-  is made transparent the instant it appears (with no flash). Stop it again with
-  **Win+Shift+S**, which also makes its windows solid. See
-  [Auto-transparent apps](#auto-transparent-apps).
-- **Kill the active window's process** (Win+F4) for unresponsive apps.
-- **Change a window's title** (Win+Shift+T) to tell same-named windows apart.
-- **Unhide from the tray** — a "Hidden" submenu lists every hidden window, grouped
-  per stack; click one to bring it back.
-- **Set the active process's priority** (Ctrl+Shift+F3…F8: low → realtime).
-- **WinMurderer** — automatically close or kill windows matching a watch-list.
-- **Hidden state survives a restart** of NUtils (but not a reboot — handles are
-  meaningless after one, so they are discarded).
-- **Feedback your way** — beeps, spoken text, or both. Spoken text goes through
-  your **screen reader**: release builds speak via Prism, which reaches NVDA over
-  its own RPC endpoint (and also JAWS, ZoomText and Narrator), so a single
-  `nutils.exe` copied to another machine still talks. Builds made without the
-  `speech` feature use NVDA's `nvdaControllerClient64.dll` if it sits next to the
-  exe, and fall back to Windows SAPI otherwise.
-- **Optional WAV sound packs** in place of the built-in PC-speaker beeps.
-- **Accessible settings editor** — rebind every shortcut in a native wxWidgets
-  dialog built for screen readers. See [Settings](#settings).
+- **Hide and unhide windows in slots.** Each slot has its own hotkey: press it
+  once to hide the active window there, press it again to bring the window back.
+  Another hotkey hides the window in the first free slot.
+- **Stacks.** Extra sets of slots, for when you need more room or want to keep
+  groups of windows apart.
+- **Transparent windows.** A transparent window can't be seen on screen, but your
+  screen reader can still read it and you can still use it. NUtils checks that
+  it really worked. If Windows refuses, or an app makes itself visible again and
+  NUtils can't make it transparent again, NUtils tells you. Turn on *Visual
+  check* to also have it look at the screen itself. This needs Screen Curtain
+  off.
+- **Auto-transparent apps.** Choose an app and all of its windows become
+  transparent, including dialogs and any new windows it opens, without flashing
+  on screen first. Turn it off again and its windows become visible.
+- **Hidden-window status.** A hotkey tells you how many windows are hidden and in
+  how many stacks. With *Detailed status* turned on, it also reads out every
+  hidden window by stack, slot and title.
+- **Tray menu.** Lists every hidden window, grouped by stack, so you can click one
+  to bring it back.
+- **Rename a window** so you can tell apart windows that have the same title.
+- **Kill the active window's process** when an app stops responding.
+- **Set the active process's priority**, from low up to realtime.
+- **WinMurderer.** Automatically close or kill windows that match a watch-list,
+  such as a nagging popup.
+- **Feedback your way.** Beeps, speech, or both. Speech goes through your screen
+  reader (NVDA, JAWS, ZoomText or Narrator), or through Windows speech if no
+  screen reader is running. You can also swap the beeps for your own WAV sound
+  pack.
+- **Remembers hidden windows** if NUtils is restarted. They are forgotten after
+  a reboot.
+- **Portable.** Settings are kept in the program's own folder.
 
 ## Installing
 
-Copy `nutils.exe` and its `lang\` folder into a folder of your choice and run it.
-NUtils lives in the system tray. To start it automatically, drop a shortcut to
-`nutils.exe` in your Startup folder (`shell:startup`).
+Unzip the release anywhere, for example into a folder in your user profile or on
+a USB stick, and run `nutils.exe`. The zip contains:
 
-## Usage
-
-Default hotkeys (all configurable in `config.toml`):
-
-| Action | Hotkey |
+| File | Purpose |
 |---|---|
-| Hide / unhide window in slot 1–10 | `Ctrl+Shift+1` … `Ctrl+Shift+0` |
-| Next / previous stack | `Ctrl+Shift+=` / `Ctrl+Shift+-` |
-| Hide in first free slot | `Win+Shift+H` |
-| Make transparent / solid | `Win+Shift+\` / `Win+Shift+/` |
-| Change active window title | `Win+Shift+T` |
-| Kill active window's process | `Win+F4` |
-| Process priority (low→realtime) | `Ctrl+Shift+F3` … `Ctrl+Shift+F8` |
-| Start auto-transparenting the active window's app | `Win+Shift+A` |
-| Stop auto-transparenting it (make it solid again) | `Win+Shift+S` |
-| Speak the hidden-window status | `Win+Shift+I` |
+| `nutils.exe` | NUtils itself. It runs in the system tray. |
+| `nutils-settings.exe` | The settings editor, opened from the tray menu. |
+| `nutils_hook.dll` | Stops auto-transparent apps flashing on screen. |
+| `README.md` | This file. |
 
-Slot `0` is the tenth slot, not slot zero. Pressing a slot's hotkey hides the
-active window there if the slot is empty, or brings that window back if occupied.
-You cannot unhide a window that is on a different stack without switching to it
-first. The desktop, taskbar, and Start menu cannot be hidden.
-
-The tray menu opens with a status line — "3 windows hidden in 2 stacks" — followed
-by a **Hidden** submenu listing every hidden window (grouped into per-stack
-submenus when they span several stacks); click one to unhide it. Choosing the
-status line itself speaks the status, exactly as the status hotkey does.
-Configuration reloads automatically within about a second of `config.toml`
-changing — from the settings editor or a manual edit — so there is no reload item.
-
-### Hidden-window status
-
-**Win+Shift+I** speaks how many windows are hidden in how many stacks. This is
-always spoken, even when feedback is set to `beeps`, since a beep pattern cannot
-carry the information; if no speech is available at all it falls back to a single
-notification tone.
-
-Turn on **Detailed status** (General tab of the settings editor, or
-`detailed_status = true` under `[settings]`) to have it additionally name the
-current stack and then every hidden window by stack, position and title:
-
-> 3 windows hidden in 2 stacks. Current stack 1. Stack 1: position 1, Untitled -
-> Notepad; position 4, Inbox - Outlook. Stack 2: position 2, Calculator.
-
-Windows with no title at all are announced by their executable name.
-
-Making a window transparent throws off screen readers that rely on display
-hooking, so there are limits to that feature. NUtils cannot act on windows running
-with higher privileges than itself.
-
-## Auto-transparent apps
-
-Mark an application so that **every new window it opens is instantly made
-transparent** — useful when an app is one you keep running "in the background" and
-never want to see on screen, even when it pops up a dialog.
-
-Press **Win+Shift+A** on any window of the app (or edit `config.toml`):
-
-```toml
-[[managed_apps]]
-match = "exe"          # "exe" | "title" | "class"
-value = "wxdragon.exe" # case-insensitive
-```
-
-To stop, press **Win+Shift+S** on any window of that app: NUtils removes it from
-the list, stops the in-process helper, and makes its windows solid again.
-
-Both cues play **three** tones (falling when auto-transparent goes on, rising when
-it goes off), against the **two** tones of the plain per-window transparent/solid
-cues — so you can hear whether you just changed one window or the whole app. A
-sound pack can override them with `autotransparent.wav` / `autosolid.wav`.
-
-The two mechanisms stay out of each other's way, so nothing fights over a window:
-
-- On a window of an auto-transparent app the **per-window** hotkeys
-  (`Win+Shift+\` / `Win+Shift+/`) are refused with a low double tone — the app's
-  transparency belongs to auto-transparent, which would just re-apply it. Stop
-  auto-transparenting the app first.
-- **Win+Shift+S** only stops auto-transparenting; on an app that isn't on the
-  list it is refused rather than making a hand-transparented window solid.
-- **Win+Shift+A** works on a window you made transparent by hand. That window
-  keeps its manual state: when you later press Win+Shift+S the app's other
-  windows go solid and this one stays transparent until you press `Win+Shift+/`.
-
-This works in two layers:
-
-- A standard `SetWinEventHook` accessibility watcher running inside NUtils' own
-  process notices when a managed app's window appears and cloaks it. This alone
-  can let a window flash for a single frame if the app paints it the instant it is
-  shown.
-- To make hiding **flash-free**, NUtils then loads a tiny helper
-  (`nutils_hook.dll`) into the designated app — and *only* that app — using
-  `SetWindowsHookEx`, the same documented mechanism screen readers use. From
-  inside the app, each new window is made transparent before it is ever painted,
-  so nothing flashes. This is the *polite* form of injection (a hook DLL), **not**
-  the `CreateRemoteThread`/memory-writing kind malware uses, and it never touches
-  any program you haven't designated. If `nutils_hook.dll` isn't present, NUtils
-  falls back to the watcher above.
+Keep all of these in the same folder. To start NUtils when you sign in, put a
+shortcut to `nutils.exe` in your Startup folder (type `shell:startup` in the Run
+dialog to open it).
 
 ## Settings
 
-Open **Settings…** from the tray icon to launch the settings editor
-(`nutils-settings.exe`), a native wxWidgets dialog chosen for its excellent screen
-reader support. It has two tabs:
+Choose **Settings...** from the tray menu. This opens a settings editor that
+works well with screen readers:
 
-- **General** — whether stacks are announced by beeping, and the **feedback
-  mode**: *Beeps*, *Spoken text*, or *Both*. Spoken text speaks through your screen
-  reader (NVDA) when it's running, and falls back to Windows SAPI otherwise (see
-  [docs/BUILDING.md](docs/BUILDING.md)).
-- **Keybindings** — a list of every shortcut ("action: binding"). Select one and
-  press **Set Shortcut…** (or Enter / double-click) to open a capture dialog:
-  a checkable **Modifiers** list (Ctrl, Shift, Windows, Alt), and a **Key** field
-  that detects the key you press — letters, digits, +, arrows, F-keys, and more.
-  Dialog keys like Tab, Enter, Escape and Space are intentionally *not* bindable. A
-  live region speaks the detected combination as you build it. The main tab also
-  has **Clear**, **Reset to Default**, and **Reset All**.
+- **General**: the feedback mode (beeps, speech or both), how stacks are
+  announced, detailed status, and the visual check.
+- **Keybindings**: every shortcut and what it does. All shortcuts share one
+  **base modifier** (Shift+Alt at first) plus a key, so changing the base moves
+  them all. Select a shortcut and press Enter to change its key, give it its own
+  modifiers instead of the base, clear it, or reset it to the default.
 
-Click **Save** and the running NUtils picks up the changes within about a second
-(it watches `config.toml` for changes) — no restart needed. The editor is a
-separate program, so wxWidgets is only loaded when you actually open settings; the
-always-running core stays a ~0.5 MB native process.
+When you press **Save**, NUtils picks up the new settings straight away. There is
+no need to restart it.
 
-## Configuration
+NUtils keeps two files next to `nutils.exe`, so keep it in a folder you can
+write to (not `Program Files`):
 
-Configuration is a single `config.toml` **next to `nutils.exe`**, created with
-defaults on first run: NUtils is portable, so the app and everything it writes
-(`config.toml`, `state.toml`) live in one folder you can copy to a stick. Only if
-that folder is read-only — installed under `Program Files`, say — does it fall
-back to `%APPDATA%\NUtils\`, so an installed copy still saves its settings. A
-config left in `%APPDATA%\NUtils` by an earlier version is moved next to the exe
-on first run. If legacy `hotkeys.ini` / `settings.ini` / `WinMurderer.ini` files
-are found next to the executable on first run, they are migrated automatically. See the sample [`config.toml`](config.toml) for every
-option, including hotkey syntax, the WinMurderer `[[rules]]` list, and
-`[[managed_apps]]`.
+- `config.toml`: your settings, including the WinMurderer rules. You can also
+  edit it by hand; see the sample [`config.toml`](config.toml) for every option.
+- `state.toml`: what NUtils records as it runs: the auto-transparent apps, and
+  the hidden windows (forgotten after a reboot). You don't need to edit it.
+
+To use a sound pack, put WAV files in a `sounds` folder next to `nutils.exe`.
+
+## Good to know
+
+- Slot 0 is the tenth slot. To bring back a window hidden in another stack,
+  switch to that stack first.
+- The desktop, the taskbar and the Start menu can't be hidden. NUtils also can't
+  act on windows that are running as administrator unless NUtils is too.
+- A transparent window may confuse screen-reader features that read what's drawn
+  on screen, such as screen review or OCR.
+- Auto-transparent loads `nutils_hook.dll` into the app you chose, and only that
+  app, using a standard Windows hook (the same method screen readers use).
+  Antivirus software may flag this. If you would rather it didn't happen, delete
+  `nutils_hook.dll`. Auto-transparent still works without it, but a new window
+  may flash on screen for a moment first.
 
 ## Building
 
-See [docs/BUILDING.md](docs/BUILDING.md). In short: install Rust (MSVC toolchain)
-and run `cargo build --release`.
-
-## A note on antivirus
-
-Window-hiding utilities and AutoIt-packed executables are common sources of
-antivirus *false positives*. Version 4 is built to minimize that: native compiled
-code, only documented Win32 APIs, and no packing or obfuscation.
-
-The one thing to be aware of: the flash-free auto-hide loads `nutils_hook.dll`
-into the app you designate via `SetWindowsHookEx` — a documented hook DLL, the
-same mechanism screen readers use, **not** remote-thread or memory-writing
-injection. Loading a DLL into another process can still draw attention from
-behavior-based antivirus, especially for an *unsigned* binary. **Code-signing
-`nutils.exe` and `nutils_hook.dll`** is therefore strongly recommended for any
-distribution; a signed hook DLL from a known publisher is treated the same way a
-signed screen reader is. If you would rather avoid injection entirely, delete
-`nutils_hook.dll` — NUtils falls back to the cross-process watcher (which may
-flash for a frame).
+See [docs/BUILDING.md](docs/BUILDING.md).
 
 ## License
 
-NUtils is free software under the **GNU General Public License v3 or later**.
-Copyright © 2008–2010 Arbalon, Niko Carpenter, and Tyler Spivey; Rust rewrite 2026.
-The full GPL text and the original authors' license notice are in the Git history
-(the AutoIt-era `license.txt`).
+NUtils is free software, licensed under the **GNU General Public License v3 or
+later**. Copyright © 2008–2010 Arbalon, Niko Carpenter and Tyler Spivey; Rust
+rewrite 2026.

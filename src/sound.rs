@@ -140,6 +140,15 @@ pub fn solid() {
         tone(880, 60);
     });
 }
+/// Transparency did not take (or was lost) — the low error tone of `cannot_hide`,
+/// in the transparency band's shape (falling), so it reads as "transparency
+/// failed" rather than "hide failed".
+pub fn transparency_error() {
+    play_or("TransparentEr", || {
+        tone(220, 90);
+        tone(196, 120);
+    });
+}
 /// Auto-transparent ON — the falling transparency cue plus a third tone, so an
 /// app-wide toggle is audibly distinct from a single-window one.
 pub fn auto_transparent() {

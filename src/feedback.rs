@@ -86,6 +86,37 @@ impl Feedback {
             sound::solid();
         }
     }
+    /// Windows refused the change (e.g. a window running as administrator), so
+    /// the window is still visible — never claim "Transparent" for it.
+    pub fn transparent_failed(&mut self) {
+        self.speak("Could not make this window transparent");
+        if self.should_beep() {
+            sound::transparency_error();
+        }
+    }
+    /// Windows accepted the change, but the visual check saw the window still on
+    /// screen, so it was put back.
+    pub fn still_visible(&mut self) {
+        self.speak("This window stays visible on screen, it can't be made transparent");
+        if self.should_beep() {
+            sound::transparency_error();
+        }
+    }
+    pub fn solid_failed(&mut self) {
+        self.speak("Could not make this window solid");
+        if self.should_beep() {
+            sound::transparency_error();
+        }
+    }
+    /// A window NUtils made transparent became visible again and could not be
+    /// made transparent again (checked on the timer).
+    pub fn transparency_lost(&mut self, title: &str) {
+        let title = if title.is_empty() { "A window" } else { title };
+        self.speak(&format!("{title} is visible again"));
+        if self.should_beep() {
+            sound::transparency_error();
+        }
+    }
     pub fn killed(&mut self) {
         self.speak("Killed");
         if self.should_beep() {

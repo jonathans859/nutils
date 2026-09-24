@@ -1,9 +1,8 @@
 //! The stack/slot model: an array of hidden-window handles grouped into stacks of
 //! ten, plus a hide-order history and persistence that is invalidated across reboots.
 
+use crate::state::Hidden;
 use crate::window::WinId;
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use windows::Win32::System::SystemInformation::GetTickCount64;
 
 pub const STACK_SIZE: usize = 10;
@@ -17,14 +16,6 @@ pub struct Stacks {
     pub history: Vec<usize>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct Persisted {
-    /// Approximate system boot time (unix seconds); state is discarded if this
-    /// no longer matches, since window handles are meaningless after a reboot.
-    boot_epoch: i64,
-    slots: Vec<WinId>,
-}
-
 fn boot_epoch() -> i64 {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -32,12 +23,6 @@ fn boot_epoch() -> i64 {
         .unwrap_or(0);
     let uptime_secs = (unsafe { GetTickCount64() } / 1000) as i64;
     now - uptime_secs
-}
-
-/// `state.toml` beside the executable, like the config -- a portable copy keeps
-/// everything it writes in its own folder. See [`crate::config::portable_path`].
-fn state_path() -> PathBuf {
-    crate::config::portable_path("state.toml", "LOCALAPPDATA")
 }
 
 impl Stacks {
@@ -49,38 +34,29 @@ impl Stacks {
         }
     }
 
-    /// Load persisted hidden windows, discarding them if the machine has rebooted.
-    pub fn load() -> Self {
+    /// The hidden windows saved in `state.toml`, discarded if the machine has
+    /// rebooted since.
+    pub fn from_saved(saved: Option<&Hidden>) -> Self {
         let mut s = Stacks::new();
-        if let Ok(text) = std::fs::read_to_string(state_path()) {
-            if let Ok(p) = toml::from_str::<Persisted>(&text) {
-                if (p.boot_epoch - boot_epoch()).abs() <= 10 {
-                    s.slots = p.slots;
-                    if s.slots.len() < STACK_SIZE {
-                        s.slots.resize(STACK_SIZE, 0);
-                    }
-                    for (i, &id) in s.slots.iter().enumerate() {
-                        if id != 0 {
-                            s.history.push(i);
-                        }
-                    }
+        if let Some(p) = saved.filter(|p| (p.boot_epoch - boot_epoch()).abs() <= 10) {
+            s.slots = p.slots.clone();
+            if s.slots.len() < STACK_SIZE {
+                s.slots.resize(STACK_SIZE, 0);
+            }
+            for (i, &id) in s.slots.iter().enumerate() {
+                if id != 0 {
+                    s.history.push(i);
                 }
             }
         }
         s
     }
 
-    pub fn save(&self) {
-        let p = Persisted {
+    /// The hidden windows, for saving in `state.toml`.
+    pub fn to_saved(&self) -> Hidden {
+        Hidden {
             boot_epoch: boot_epoch(),
             slots: self.slots.clone(),
-        };
-        if let Ok(text) = toml::to_string(&p) {
-            let path = state_path();
-            if let Some(parent) = path.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let _ = std::fs::write(path, text);
         }
     }
 

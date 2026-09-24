@@ -66,12 +66,18 @@ jobs:
           WXWIDGETS_BUILD_DIR: ${{ github.workspace }}\.wxbuild\wx
         run: cargo build --release -p nutils-settings
 
+      # Gather everything into one folder so the zip is flat: the binaries plus
+      # the README, which doubles as the user guide.
+      - name: Stage release files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/nutils.exe, target/release/nutils_hook.dll, `
+            target/release/nutils-settings.exe, README.md dist/
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: nutils-${{ github.sha }}
-          path: |
-            target/release/nutils.exe
-            target/release/nutils_hook.dll
-            target/release/nutils-settings.exe
+          path: dist/
           if-no-files-found: error
