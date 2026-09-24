@@ -371,7 +371,10 @@ fn list_item(cfg: &Config, act: Act, label: &str, kind: Kind) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Screen-reader live region (announces the detected key), copied from Fedra.
+// Screen-reader live region (announces the detected key), copied from Fedra
+// (https://github.com/trypsynth/fedra):
+//   Copyright (c) 2026 Quin Gillespie and Aryan Choudhary
+//   Licensed under the MIT License; the full text is in licenses/Fedra.txt.
 // ---------------------------------------------------------------------------
 
 #[cfg(windows)]

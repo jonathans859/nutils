@@ -6,8 +6,9 @@ with a keystroke, so you can keep lots of things open without them cluttering
 your taskbar, your Alt+Tab list or your screen.
 
 It was originally written in AutoIt (2008–2010) by **Niko Carpenter** and
-**Tyler Spivey**. Version 4 is a complete rewrite in Rust on the native Win32
-API.
+**Tyler Spivey** ([original project](https://github.com/n0ot/nutils)). Version 4
+is a complete rewrite in Rust on the native Win32 API; its source is at
+<https://github.com/jonathans859/nutils>.
 
 ## Features
 
@@ -54,6 +55,8 @@ a USB stick, and run `nutils.exe`. The zip contains:
 | `nutils-settings.exe` | The settings editor, opened from the tray menu. |
 | `nutils_hook.dll` | Stops auto-transparent apps flashing on screen. |
 | `README.md` | This file. |
+| `LICENSE` | The GNU General Public License, which NUtils is under. |
+| `THIRD-PARTY-NOTICES.txt` | Licenses of the libraries NUtils is built with. |
 
 Keep all of these in the same folder. To start NUtils when you sign in, put a
 shortcut to `nutils.exe` in your Startup folder (type `shell:startup` in the Run
@@ -104,6 +107,16 @@ See [docs/BUILDING.md](docs/BUILDING.md).
 
 ## License
 
-NUtils is free software, licensed under the **GNU General Public License v3 or
-later**. Copyright © 2008–2010 Arbalon, Niko Carpenter and Tyler Spivey; Rust
-rewrite 2026.
+NUtils is free software: you can redistribute it and/or modify it under the
+terms of the **GNU General Public License, version 3 or (at your option) any
+later version**. It comes with no warranty. The full license text is in
+[`LICENSE`](LICENSE).
+
+- Original NUtils (AutoIt, versions 1–3): Copyright © 2008–2010 Arbalon, Niko
+  Carpenter and Tyler Spivey. <https://github.com/n0ot/nutils>
+- Version 4 is a modified version of it, rewritten in Rust in 2026 by
+  jonathans859. Source: <https://github.com/jonathans859/nutils>
+
+NUtils is built with other open-source libraries, each under its own license
+(MIT, Apache 2.0, MPL 2.0, the wxWindows Library Licence and others). Their
+notices are in `THIRD-PARTY-NOTICES.txt`, which comes with every release.

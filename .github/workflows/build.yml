@@ -100,14 +100,26 @@ jobs:
           WXWIDGETS_BUILD_DIR: ${{ github.workspace }}\.wxbuild\wx
         run: cargo build --release -p nutils-settings
 
-      # Gather everything into one folder so the zip is flat: the binaries plus
-      # the README, which doubles as the user guide.
+      # The GPL and the libraries' own licenses require their notices to travel
+      # with the binaries. cargo-about is installed prebuilt (seconds, no compile).
+      - name: Install cargo-about
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+
+      - name: Generate third-party notices
+        shell: pwsh
+        run: ./scripts/notices.ps1 -Out THIRD-PARTY-NOTICES.txt
+
+      # Gather everything into one folder so the zip is flat: the binaries, the
+      # README (which doubles as the user guide) and the licenses.
       - name: Stage release files
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item target/release/nutils.exe, target/release/nutils_hook.dll, `
-            target/release/nutils-settings.exe, README.md dist/
+            target/release/nutils-settings.exe, README.md, LICENSE, `
+            THIRD-PARTY-NOTICES.txt dist/
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

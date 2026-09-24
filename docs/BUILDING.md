@@ -79,6 +79,8 @@ nutils.exe
 nutils_hook.dll             (the in-process auto-hide helper; MUST sit next to nutils.exe)
 nvdaControllerClient64.dll  (default builds only; a Prism build speaks to NVDA on its own)
 nutils-settings.exe         (the settings editor, launched from the tray)
+LICENSE                     (the GPL; required with every copy)
+THIRD-PARTY-NOTICES.txt     (library licenses; .\scripts\notices.ps1 builds it, needs cargo-about)
 sounds\                     (optional WAV sound pack; PC-speaker beeps used if absent)
 config.toml                 (the settings; written here on first run)
 state.toml                  (auto-transparent apps and hidden windows; written by NUtils)

@@ -1,0 +1,24 @@
+NUtils third-party notices
+==========================
+
+NUtils is licensed under the GNU General Public License v3 or later (see
+LICENSE). It is built from the libraries below, each under its own license.
+Their copyright notices and license texts follow.
+
+Libraries built into nutils.exe, nutils_hook.dll and nutils-settings.exe:
+{{#each overview}}
+- {{name}} ({{count}} crate{{#if (gt count 1)}}s{{/if}})
+{{/each}}
+
+{{#each licenses}}
+------------------------------------------------------------------------------
+{{name}}
+
+Used by:
+{{#each used_by}}
+  {{crate.name}} {{crate.version}}{{#if crate.repository}} - {{crate.repository}}{{/if}}
+{{/each}}
+
+{{{text}}}
+
+{{/each}}
