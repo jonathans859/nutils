@@ -2,7 +2,8 @@
 //! ten, plus a hide-order history and persistence that is invalidated across reboots.
 
 use crate::state::Hidden;
-use crate::window::WinId;
+use crate::window::{self, to_id, WinId};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::System::SystemInformation::GetTickCount64;
 
 pub const STACK_SIZE: usize = 10;
@@ -135,6 +136,37 @@ impl Stacks {
         self.shift / STACK_SIZE + 1
     }
 
+    /// Take back windows NUtils hid but has lost track of (`state.toml` deleted
+    /// or reset): a hidden window still carrying the mark [`window::hide`] puts
+    /// on it goes back into its old slot, or the first free one if that is taken.
+    /// A marked window that is visible again was shown some other way, so its
+    /// stale mark is removed instead. Returns how many windows were recovered.
+    pub fn recover(&mut self, windows: &[HWND]) -> usize {
+        let mut recovered = 0;
+        for &h in windows {
+            let Some(slot) = window::hidden_slot(h) else {
+                continue;
+            };
+            if window::is_visible(h) {
+                window::clear_hidden_mark(h);
+                continue;
+            }
+            if self.slots.contains(&to_id(h)) {
+                continue;
+            }
+            // A wild slot number (a window some other tool marked) isn't trusted
+            // to size the slot array.
+            let slot = if slot < 100 * STACK_SIZE && self.get(slot) == 0 {
+                slot
+            } else {
+                self.first_free_or_grow(0)
+            };
+            self.set(slot, to_id(h));
+            recovered += 1;
+        }
+        recovered
+    }
+
     /// Trim trailing empty slots back down to a multiple of [`STACK_SIZE`]
     /// (keeping at least one stack).
     pub fn prune(&mut self) {
@@ -165,5 +197,60 @@ pub fn human_to_slot(digit: u32) -> usize {
         STACK_SIZE - 1
     } else {
         (digit - 1) as usize
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::core::{w, PCWSTR};
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DestroyWindow, ShowWindow, SW_SHOWNOACTIVATE, WINDOW_EX_STYLE,
+        WS_OVERLAPPEDWINDOW,
+    };
+
+    /// A hidden (never shown) top-level test window.
+    fn test_window() -> HWND {
+        unsafe {
+            let hinst = GetModuleHandleW(None).unwrap();
+            CreateWindowExW(
+                WINDOW_EX_STYLE(0), w!("STATIC"), PCWSTR::null(), WS_OVERLAPPEDWINDOW,
+                0, 0, 100, 100, None, None, Some(hinst.into()), None,
+            )
+            .unwrap()
+        }
+    }
+
+    #[test]
+    fn marked_windows_are_recovered_into_their_slots() {
+        let (a, b, c) = (test_window(), test_window(), test_window());
+        window::hide(a, 3);
+        window::hide(b, 3); // same slot: goes to the first free one instead
+        window::hide(c, 12);
+        let mut stacks = Stacks::new(); // as if state.toml was lost
+        assert_eq!(stacks.recover(&[a, b, c]), 3);
+        assert_eq!(stacks.get(3), to_id(a));
+        assert_eq!(stacks.get(0), to_id(b));
+        assert_eq!(stacks.get(12), to_id(c));
+        assert_eq!(stacks.recover(&[a, b, c]), 0, "already known: not recovered twice");
+        for h in [a, b, c] {
+            unsafe { DestroyWindow(h).unwrap() };
+        }
+    }
+
+    #[test]
+    fn shown_or_unmarked_windows_are_left_alone() {
+        let (marked, plain) = (test_window(), test_window());
+        window::hide(marked, 2);
+        unsafe {
+            let _ = ShowWindow(marked, SW_SHOWNOACTIVATE); // shown some other way
+        }
+        let mut stacks = Stacks::new();
+        assert_eq!(stacks.recover(&[marked, plain]), 0);
+        assert_eq!(window::hidden_slot(marked), None, "stale mark removed");
+        for h in [marked, plain] {
+            unsafe { DestroyWindow(h).unwrap() };
+        }
     }
 }

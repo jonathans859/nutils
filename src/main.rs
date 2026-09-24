@@ -87,7 +87,9 @@ fn main() {
 
     let cfg = Config::load_or_init();
     let state = state::State::load();
-    let stacks = Stacks::from_saved(state.hidden.as_ref());
+    let mut stacks = Stacks::from_saved(state.hidden.as_ref());
+    // Windows NUtils hid but lost track of (state.toml deleted or reset).
+    let recovered = stacks.recover(&window::enum_top_windows());
 
     let instance = unsafe { GetModuleHandleW(None).unwrap_or_default() };
     let class = w!("NUtilsMainWnd");
@@ -147,7 +149,10 @@ fn main() {
         config_mtime: config_mtime(),
     };
     app.set_hotkeys(true);
-    app.fb.ready(); // startup: beep + "NUtils ready"
+    if recovered > 0 {
+        app.save_state();
+    }
+    app.fb.ready(recovered); // startup: beep + "NUtils ready"
     APP.with(|a| *a.borrow_mut() = Some(app));
 
     unsafe {
@@ -297,7 +302,7 @@ impl App {
                 self.fb.cannot_hide();
                 return;
             }
-            window::hide(hwnd);
+            window::hide(hwnd, slot);
             self.stacks.set(slot, to_id(hwnd));
             self.fb.window_down();
         }
@@ -312,7 +317,7 @@ impl App {
             self.fb.cannot_hide();
             return;
         }
-        window::hide(hwnd);
+        window::hide(hwnd, slot);
         self.stacks.set(slot, to_id(hwnd));
         self.fb.window_down();
         self.stacks.prune();
@@ -608,6 +613,7 @@ impl App {
             }
             let h = from_id(id);
             if !window::exists(h) || window::is_visible(h) {
+                window::clear_hidden_mark(h); // shown some other way
                 self.stacks.clear(i);
                 self.fb.disappeared();
                 changed = true;

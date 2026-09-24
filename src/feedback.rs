@@ -200,13 +200,18 @@ impl Feedback {
 
     /// Startup announcement: always a beep AND spoken "NUtils ready", regardless of
     /// the configured feedback mode (so it is unmistakable that NUtils is running).
-    /// Speaks first so the voice overlaps the ascending tone.
-    pub fn ready(&mut self) {
+    /// Speaks first so the voice overlaps the ascending tone. `recovered` is how
+    /// many lost hidden windows were taken back at startup.
+    pub fn ready(&mut self, recovered: usize) {
         if self.speaker.is_none() {
             self.speaker = Speaker::new();
         }
         if let Some(s) = &mut self.speaker {
-            s.speak("NUtils ready");
+            s.speak(&match recovered {
+                0 => "NUtils ready".to_string(),
+                1 => "NUtils ready, recovered 1 hidden window".to_string(),
+                n => format!("NUtils ready, recovered {n} hidden windows"),
+            });
         }
         sound::startup();
     }

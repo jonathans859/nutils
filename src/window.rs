@@ -50,14 +50,35 @@ pub fn is_top_level(hwnd: HWND) -> bool {
     unsafe { GetAncestor(hwnd, GA_ROOT) == hwnd }
 }
 
-pub fn hide(hwnd: HWND) {
+/// Marks a window NUtils has hidden; the value is its slot plus one (0 would
+/// read as "absent"). Kept on the window itself, so a hidden window can be found
+/// again even if `state.toml` is lost: see [`hidden_slot`].
+const HIDDEN_PROP: PCWSTR = w!("NUtils.HiddenSlot");
+
+/// Hide a window into `slot`, marking it with the slot.
+pub fn hide(hwnd: HWND, slot: usize) {
     unsafe {
+        let _ = SetPropW(hwnd, HIDDEN_PROP, Some(HANDLE((slot + 1) as *mut core::ffi::c_void)));
         let _ = ShowWindow(hwnd, SW_MINIMIZE);
         let _ = ShowWindow(hwnd, SW_HIDE);
     }
 }
 
+/// The slot NUtils hid this window into, if it carries the mark.
+pub fn hidden_slot(hwnd: HWND) -> Option<usize> {
+    let v = unsafe { GetPropW(hwnd, HIDDEN_PROP).0 as usize };
+    v.checked_sub(1)
+}
+
+/// Remove the hidden-window mark (the window was shown, here or elsewhere).
+pub fn clear_hidden_mark(hwnd: HWND) {
+    unsafe {
+        let _ = RemovePropW(hwnd, HIDDEN_PROP);
+    }
+}
+
 pub fn show(hwnd: HWND) {
+    clear_hidden_mark(hwnd);
     unsafe {
         let _ = ShowWindow(hwnd, SW_SHOW);
         // If it was minimized while hidden, bring it back to its real size.
@@ -708,7 +729,7 @@ mod focus_restore {
         std::thread::sleep(Duration::from_millis(2000));
         eprintln!("before hide: foreground={} focus={}", foreground() == h, focused(h));
 
-        hide(h);
+        hide(h, 0);
         std::thread::sleep(Duration::from_millis(500));
         show(h);
         std::thread::sleep(Duration::from_millis(800));
