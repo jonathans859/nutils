@@ -42,6 +42,11 @@ is a complete rewrite in Rust on the native Win32 API; its source is at
   pack.
 - **Remembers hidden windows** if NUtils is restarted. They are forgotten after
   a reboot.
+- **Updates.** NUtils checks for a new release when it starts. If there is one,
+  the tray icon says so and the tray menu offers to install it; NUtils then
+  restarts by itself. You can also choose **Check for updates** in the tray menu
+  at any time. Updates are signed, and NUtils refuses one whose signature
+  doesn't match.
 - **Portable.** Settings are kept in the program's own folder.
 
 ## Installing
@@ -68,7 +73,8 @@ Choose **Settings...** from the tray menu. This opens a settings editor that
 works well with screen readers:
 
 - **General**: the feedback mode (beeps, speech or both), how stacks are
-  announced, detailed status, and the visual check.
+  announced, detailed status, the visual check, and whether to check for
+  updates at startup (with a button to check now).
 - **Keybindings**: every shortcut and what it does. All shortcuts share one
   **base modifier** (Shift+Alt at first) plus a key, so changing the base moves
   them all. Select a shortcut and press Enter to change its key, give it its own

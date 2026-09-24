@@ -33,6 +33,8 @@ detailed_status = false  # true: the status hotkey also names each hidden window
 visual_check = false     # true: when a hotkey makes a window transparent, also
                          # compare the screen before and after, and say so if
                          # the window is still visible. Needs Screen Curtain off.
+check_for_updates = true # false: don't check GitHub for a new release at startup
+                         # (Check for updates in the tray menu still works).
 
 # --- WinMurderer: auto-close/kill windows on sight ---
 # [[rules]]

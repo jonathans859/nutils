@@ -1,7 +1,8 @@
 //! System-tray icon and its right-click menu: a status line saying how many
 //! windows are hidden in how many stacks, a "Hidden" submenu listing every hidden
 //! window (grouped into per-stack submenus when they span several stacks), then
-//! Settings and Exit.
+//! the update items, Settings and Exit. When a newer release is known, the icon's
+//! text says so and the menu offers it right after the status line.
 
 use crate::stacks::{slot_to_human, Stacks, STACK_SIZE};
 use crate::{status, window};
@@ -9,7 +10,8 @@ use std::collections::BTreeMap;
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 use windows::Win32::UI::Shell::{
-    Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW,
+    Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY,
+    NOTIFYICONDATAW,
 };
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -20,12 +22,17 @@ pub const WM_TRAY: u32 = WM_APP + 1;
 const CMD_EXIT: usize = 1;
 const CMD_SETTINGS: usize = 2;
 const CMD_STATUS: usize = 3;
+const CMD_UPDATE: usize = 4;
+const CMD_CHECK_UPDATES: usize = 5;
 const SLOT_BASE: usize = 1000;
 
 pub enum MenuChoice {
     Exit,
     Settings,
     Status,
+    /// Install the newer release the tray is offering.
+    Update,
+    CheckUpdates,
     Unhide(usize),
 }
 
@@ -55,6 +62,14 @@ impl Tray {
             let _ = Shell_NotifyIconW(NIM_ADD, &data);
         }
         Tray { data }
+    }
+
+    /// Change the icon's text (what a screen reader reads on the icon).
+    pub fn set_tip(&mut self, tip: &str) {
+        set_tip(&mut self.data, tip);
+        unsafe {
+            let _ = Shell_NotifyIconW(NIM_MODIFY, &self.data);
+        }
     }
 
     pub fn remove(&self) {
@@ -92,7 +107,8 @@ fn append_submenu(parent: HMENU, sub: HMENU, text: &str) {
 }
 
 /// Build and display the tray context menu at the cursor, returning the choice.
-pub fn show_menu(hwnd: HWND, stacks: &Stacks) -> Option<MenuChoice> {
+/// `update` is a newer release found at startup, if any.
+pub fn show_menu(hwnd: HWND, stacks: &Stacks, update: Option<&str>) -> Option<MenuChoice> {
     unsafe {
         let menu = CreatePopupMenu().ok()?;
 
@@ -100,6 +116,9 @@ pub fn show_menu(hwnd: HWND, stacks: &Stacks) -> Option<MenuChoice> {
         // It stays selectable (rather than greyed, which readers announce as
         // "unavailable") and choosing it speaks the full status.
         append(menu, CMD_STATUS, &status::brief(stacks));
+        if let Some(version) = update {
+            append(menu, CMD_UPDATE, &format!("Update to {version} ..."));
+        }
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
 
         // Group hidden windows by their stack (BTreeMap keeps stacks in order).
@@ -140,6 +159,7 @@ pub fn show_menu(hwnd: HWND, stacks: &Stacks) -> Option<MenuChoice> {
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         }
 
+        append(menu, CMD_CHECK_UPDATES, "Check for updates ...");
         append(menu, CMD_SETTINGS, "Settings ...");
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         append(menu, CMD_EXIT, "Exit");
@@ -171,6 +191,8 @@ pub fn show_menu(hwnd: HWND, stacks: &Stacks) -> Option<MenuChoice> {
             CMD_EXIT => MenuChoice::Exit,
             CMD_SETTINGS => MenuChoice::Settings,
             CMD_STATUS => MenuChoice::Status,
+            CMD_UPDATE => MenuChoice::Update,
+            CMD_CHECK_UPDATES => MenuChoice::CheckUpdates,
             _ => return None,
         })
     }

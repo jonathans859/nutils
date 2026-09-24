@@ -1,0 +1,82 @@
+name: Release
+
+# Push a tag like v4.0.0 to publish a release. It is built by build.yml, then
+# zipped as nutils.zip and signed with minisign; the updater in
+# nutils-settings.exe only accepts a zip whose signature verifies against the
+# public key built into it. The notes come from CHANGELOG.md's section for the
+# version, and are what the update dialog shows.
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    needs: build
+    # Linux: packaging and signing need nothing Windows-specific, and Linux
+    # minutes cost half as much.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the version
+        run: |
+          version=$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match Cargo.toml version $version"
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nutils
+          path: dist
+
+      - name: Zip
+        run: cd dist && zip -9 -r ../nutils.zip .
+
+      - name: Install minisign
+        run: |
+          gh release download 0.12 -R jedisct1/minisign -p 'minisign-0.12-linux.tar.gz'
+          tar -xzf minisign-0.12-linux.tar.gz
+          echo "$PWD/minisign-linux/x86_64" >> "$GITHUB_PATH"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # The public key is read from the updater's source, so a release that the
+      # shipped updater would reject can't be published.
+      - name: Sign
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/nutils.key"
+          minisign -S -s "$RUNNER_TEMP/nutils.key" -m nutils.zip -t "NUtils $GITHUB_REF_NAME"
+          rm "$RUNNER_TEMP/nutils.key"
+          public_key=$(grep -oP 'PUBLIC_KEY: &str = "\K[^"]+' settings/src/update.rs)
+          minisign -V -P "$public_key" -m nutils.zip
+
+      - name: Release notes
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          awk -v v="$version" '
+            /^## / { if (found) exit; if ($2 == v) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no section '## $version'"
+            exit 1
+          fi
+          cat notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" nutils.zip nutils.zip.minisig \
+            --title "NUtils ${GITHUB_REF_NAME#v}" --notes-file notes.md

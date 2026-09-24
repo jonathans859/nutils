@@ -9,6 +9,8 @@
 
 #![windows_subsystem = "windows"]
 
+mod update;
+
 #[path = "../../src/config.rs"]
 #[allow(dead_code)]
 mod config;
@@ -704,9 +706,24 @@ fn prompt_for_shortcut(
 // ---------------------------------------------------------------------------
 
 fn main() {
+    // Modes the NUtils core starts this program in (see update.rs): a check with
+    // no window, or just the update flow.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--check") {
+        std::process::exit(update::check_headless());
+    }
+    let update_only = args.iter().any(|a| a == "--update");
+
     SystemOptions::set_option_by_int("msw.no-manifest-check", 1);
 
-    let _ = wxdragon::main(|_| {
+    let _ = wxdragon::main(move |_| {
+        if update_only {
+            // A never-shown frame as the dialogs' parent; the process exits when
+            // the flow is done.
+            let frame = Frame::builder().with_title("NUtils Update").build();
+            update::run(&frame, true);
+            return;
+        }
         let cfg = Rc::new(RefCell::new(Config::load_or_init()));
 
         let frame = Frame::builder()
@@ -755,6 +772,15 @@ fn main() {
             .build();
         visual_cb.set_value(cfg.borrow().settings.visual_check);
         gsizer.add(&visual_cb, 0, SizerFlag::All, 8);
+
+        let updates_cb = CheckBox::builder(&general)
+            .with_label("Check for &updates when NUtils starts")
+            .build();
+        updates_cb.set_value(cfg.borrow().settings.check_for_updates);
+        gsizer.add(&updates_cb, 0, SizerFlag::All, 8);
+        let check_now = Button::builder(&general).with_label("Check for updates &now").build();
+        check_now.on_click(move |_| update::run(&frame, false));
+        gsizer.add(&check_now, 0, SizerFlag::All, 8);
 
         general.set_sizer(gsizer, true);
         notebook.add_page(&general, "General", true, None);
@@ -871,6 +897,7 @@ fn main() {
         let fbc = fb_choice;
         let dsc = detail_cb;
         let vsc = visual_cb;
+        let usc = updates_cb;
         let save_frame = frame;
         save.on_click(move |_| {
             save_cfg.borrow_mut().settings.stack_counter = sc.get_value();
@@ -881,6 +908,7 @@ fn main() {
             };
             save_cfg.borrow_mut().settings.detailed_status = dsc.get_value();
             save_cfg.borrow_mut().settings.visual_check = vsc.get_value();
+            save_cfg.borrow_mut().settings.check_for_updates = usc.get_value();
             let _ = save_cfg.borrow().save();
             save_frame.close(true);
         });

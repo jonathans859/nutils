@@ -15,6 +15,9 @@ accepted = [
     "MPL-2.0",
     "LGPL-2.1-or-later",
     "GPL-3.0-or-later",
+    # webpki-roots: the root certificates the updater trusts for HTTPS. A
+    # permissive data license that only asks for its text to be included.
+    "CDLA-Permissive-2.0",
 ]
 targets = ["x86_64-pc-windows-msvc"]
 ignore-build-dependencies = true

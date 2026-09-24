@@ -166,6 +166,10 @@ pub struct Settings {
     /// Curtain off; with it on the check is skipped.
     #[serde(default)]
     pub visual_check: bool,
+    /// `true` = check GitHub for a newer release when NUtils starts, and show it
+    /// in the tray. Checking by hand works either way.
+    #[serde(default = "default_true")]
+    pub check_for_updates: bool,
 }
 
 fn default_true() -> bool {
@@ -179,6 +183,7 @@ impl Default for Settings {
             feedback: FeedbackMode::Beeps,
             detailed_status: false,
             visual_check: false,
+            check_for_updates: true,
         }
     }
 }

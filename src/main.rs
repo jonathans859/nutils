@@ -11,6 +11,7 @@ mod state;
 mod status;
 mod tray;
 mod ui;
+mod update;
 mod visual;
 mod window;
 mod winevent;
@@ -51,7 +52,9 @@ struct App {
     stacks: Stacks,
     /// Apps whose windows are made transparent automatically (kept in state.toml).
     managed_apps: Vec<ManagedApp>,
-    _tray: tray::Tray,
+    tray: tray::Tray,
+    /// A newer release found by the startup check, offered in the tray.
+    update_available: Option<String>,
     hook: winevent::HookThread,
     fb: feedback::Feedback,
     /// Windows made transparent by the per-window hotkey (as opposed to by an
@@ -86,6 +89,7 @@ fn main() {
     }
 
     let cfg = Config::load_or_init();
+    update::clean_up_old_files(); // left behind by an update
     let state = state::State::load();
     let mut stacks = Stacks::from_saved(state.hidden.as_ref());
     // Windows NUtils hid but lost track of (state.toml deleted or reset).
@@ -141,7 +145,8 @@ fn main() {
         cfg,
         stacks,
         managed_apps: state.managed_apps,
-        _tray: tray,
+        tray,
+        update_available: None,
         hook,
         fb,
         manual_transparent: std::collections::HashSet::new(),
@@ -153,6 +158,9 @@ fn main() {
         app.save_state();
     }
     app.fb.ready(recovered); // startup: beep + "NUtils ready"
+    if app.cfg.settings.check_for_updates {
+        update::check_in_background(hwnd);
+    }
     APP.with(|a| *a.borrow_mut() = Some(app));
 
     unsafe {
@@ -183,7 +191,7 @@ fn main() {
 /// borrow. This is the whole reentrancy strategy.
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
-        WM_HOTKEY | tray::WM_TRAY | WM_TIMER => {
+        WM_HOTKEY | tray::WM_TRAY | WM_TIMER | update::WM_UPDATE_FOUND => {
             if let Some(mut app) = APP.with(|a| a.borrow_mut().take()) {
                 let keep_running = app.handle(msg, wp, lp);
                 APP.with(|a| *a.borrow_mut() = Some(app));
@@ -213,6 +221,12 @@ impl App {
                 }
             }
             WM_TIMER => self.on_timer(),
+            update::WM_UPDATE_FOUND => {
+                if let Some(version) = update::take_found() {
+                    self.tray.set_tip(&format!("NUtils: update {version} available"));
+                    self.update_available = Some(version);
+                }
+            }
             _ => {}
         }
         true
@@ -437,6 +451,20 @@ impl App {
         self.save_state();
     }
 
+    /// Run the update flow in the settings program; it closes and restarts
+    /// NUtils itself if an update is installed.
+    fn start_update(&self) {
+        if !update::launch() {
+            self.set_hotkeys(false);
+            ui::message_box(
+                "Update",
+                "nutils-settings.exe was not found next to nutils.exe, and it runs updates.",
+                MB_ICONWARNING,
+            );
+            self.set_hotkeys(true);
+        }
+    }
+
     /// Launch the wxWidgets settings editor (a sibling `nutils-settings.exe`).
     /// It edits config.toml; the timer notices the change and reloads.
     fn launch_settings(&self) {
@@ -554,12 +582,13 @@ impl App {
     /// Returns false to exit the application.
     fn on_tray_menu(&mut self) -> bool {
         self.set_hotkeys(false);
-        let choice = tray::show_menu(self.hwnd, &self.stacks);
+        let choice = tray::show_menu(self.hwnd, &self.stacks, self.update_available.as_deref());
         self.set_hotkeys(true);
         match choice {
             Some(MenuChoice::Exit) => return false,
             Some(MenuChoice::Settings) => self.launch_settings(),
             Some(MenuChoice::Status) => self.announce_status(),
+            Some(MenuChoice::Update | MenuChoice::CheckUpdates) => self.start_update(),
             Some(MenuChoice::Unhide(slot)) => self.unhide_slot(slot),
             None => {}
         }

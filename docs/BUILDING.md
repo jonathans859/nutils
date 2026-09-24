@@ -98,6 +98,29 @@ settings editor) and `state.toml` (written by NUtils as it runs) always sit
 **next to the executable**, so its folder must be writable. There is no
 fallback to `%APPDATA%`.
 
+## Releasing
+
+1. Add a `## <version>` section to `CHANGELOG.md`; it becomes the release notes
+   the update dialog shows.
+2. Set the same version in the three `Cargo.toml` files, and commit.
+3. Tag the commit `v<version>` and push the tag:
+
+   ```sh
+   git tag v4.1.0
+   git push origin v4.1.0
+   ```
+
+`.github/workflows/release.yml` then builds with `build.yml`, zips the result as
+`nutils.zip`, signs it with minisign, and publishes the GitHub release with
+`nutils.zip` and `nutils.zip.minisig`. The updater (`settings/src/update.rs`,
+using [ship-shape](https://github.com/trypsynth/ship-shape)) downloads exactly
+those two files and installs the zip only if the signature verifies against the
+public key in its source.
+
+The secret key is the repository secret `MINISIGN_SECRET_KEY`. Keep a backup of
+it outside GitHub: without it, no future release can be signed so that existing
+copies accept it, and the key built into them would have to change.
+
 ## Spoken feedback
 
 Choose **Feedback: Spoken text** (or Both) in Settings → General to have NUtils
