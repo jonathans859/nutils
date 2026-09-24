@@ -115,7 +115,7 @@ later version**. It comes with no warranty. The full license text is in
 - Original NUtils (AutoIt, versions 1–3): Copyright © 2008–2010 Arbalon, Niko
   Carpenter and Tyler Spivey. <https://github.com/n0ot/nutils>
 - Version 4 is a modified version of it, rewritten in Rust in 2026 by
-  jonathans859. Source: <https://github.com/jonathans859/nutils>
+  Jonathan Schuster. Source: <https://github.com/jonathans859/nutils>
 
 NUtils is built with other open-source libraries, each under its own license
 (MIT, Apache 2.0, MPL 2.0, the wxWindows Library Licence and others). Their

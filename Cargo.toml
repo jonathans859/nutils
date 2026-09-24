@@ -9,7 +9,7 @@ publish = false
 authors = [
     "Niko Carpenter",
     "Tyler Spivey",
-    "Rust rewrite: Jonathan <accounts@jonathan859.com>",
+    "Rust rewrite: Jonathan Schuster <accounts@jonathan859.com>",
 ]
 
 [[bin]]
