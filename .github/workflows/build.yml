@@ -112,6 +112,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nutils-${{ github.sha }}
+          # Downloads as nutils.zip; each run keeps its own artifact.
+          name: nutils
           path: dist/
           if-no-files-found: error
