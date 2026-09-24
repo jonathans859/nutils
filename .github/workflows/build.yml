@@ -1,10 +1,29 @@
 name: Build
 
+# Windows runners bill double on a private repo, so this avoids work it doesn't
+# need: doc-only changes don't run it, a newer push cancels an older run, NUtils
+# is built once, and the settings editor (wxWidgets) is only rebuilt when its
+# own sources change.
+
 on:
   push:
     branches: [master]
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**.md'
+      - 'README.md' # ships in the artifact, so it does rebuild
   pull_request:
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**.md'
+      - 'README.md' # ships in the artifact, so it does rebuild
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -23,10 +42,12 @@ jobs:
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
 
-      # The core and the injected helper DLL need no extra toolchain.
-      - name: Build core + hook DLL
-        run: cargo build --release -p nutils -p nutils-hook
+      # The injected helper DLL needs no extra toolchain.
+      - name: Build hook DLL
+        run: cargo build --release -p nutils-hook
 
+      # Tests use the plain build: build.rs delay-loads Prism's vendor DLLs for
+      # the program only, so a speech-enabled test binary wouldn't start here.
       - name: Test
         run: cargo test --release -p nutils
 
@@ -34,24 +55,36 @@ jobs:
       # protocol itself -- so the artifact needs no nvdaControllerClient64.dll
       # beside it. cmake/prism.cmake pins Prism to the static CRT to match this
       # repo's +crt-static; PRISM_STATIC=1 links Prism in rather than as a DLL.
-      # This overwrites the nutils.exe built above, which is what we ship.
       - name: Build nutils with Prism speech
         env:
           PRISM_STATIC: "1"
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}\cmake\prism.cmake
         run: cargo build --release -p nutils --features speech
 
-      # The settings editor builds wxWidgets from source: needs CMake (preinstalled
-      # on the runner), Ninja, and libclang for bindgen. LLVM is preinstalled at
+      # The settings editor only changes when these files do, so reuse the last
+      # built exe when they haven't: the artifact is always complete, and
+      # wxWidgets is only touched when the editor really needs rebuilding.
+      - name: Reuse settings editor
+        id: settings-exe
+        uses: actions/cache@v4
+        with:
+          path: target/release/nutils-settings.exe
+          key: settings-exe-${{ runner.os }}-${{ hashFiles('settings/**', 'src/config.rs', 'Cargo.lock', 'Cargo.toml', '.cargo/config.toml') }}
+
+      # Building it compiles wxWidgets from source: needs CMake (preinstalled on
+      # the runner), Ninja, and libclang for bindgen. LLVM is preinstalled at
       # C:\Program Files\LLVM.
       - name: Install Ninja
+        if: steps.settings-exe.outputs.cache-hit != 'true'
         run: choco install ninja -y
 
-      # Cache the compiled wxWidgets so it isn't rebuilt from source every run
+      # Cache the compiled wxWidgets so it isn't rebuilt from source every time
       # (~20 min cold -> a couple of minutes warm). wxdragon-sys writes its CMake
       # output to the dirs named by these env vars; we cache them, keyed on the
-      # locked dependency versions.
+      # locked dependency versions. GitHub drops caches unused for 7 days, so the
+      # first editor build after a quiet week is cold again.
       - name: Cache wxWidgets build
+        if: steps.settings-exe.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: .wxbuild
@@ -60,6 +93,7 @@ jobs:
             wxwidgets-${{ runner.os }}-
 
       - name: Build settings editor
+        if: steps.settings-exe.outputs.cache-hit != 'true'
         env:
           LIBCLANG_PATH: C:\Program Files\LLVM\bin
           WXDRAGON_SYS_BUILD_DIR: ${{ github.workspace }}\.wxbuild\sys
