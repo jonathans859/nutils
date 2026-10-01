@@ -340,17 +340,29 @@ mod speaker_impl {
 
 #[cfg(feature = "speech")]
 mod speaker_impl {
+    use prismer::{Backend, Prism};
+    use std::cell::OnceCell;
+
+    thread_local! {
+        /// The Prism context, created once per thread and kept for the life of
+        /// the program: a backend borrows the context it came from, so the
+        /// context must outlive every `Speaker`.
+        static PRISM: OnceCell<Option<&'static Prism>> = const { OnceCell::new() };
+    }
+
+    fn prism() -> Option<&'static Prism> {
+        PRISM.with(|p| *p.get_or_init(|| Prism::new().ok().map(|p| &*Box::leak(Box::new(p)))))
+    }
+
     /// Speaks via Prism (routes to the active screen reader / TTS).
     pub struct Speaker {
-        backend: prism::Backend,
-        _ctx: prism::Context,
+        backend: Backend<'static>,
     }
 
     impl Speaker {
         pub fn new() -> Option<Self> {
-            let ctx = prism::Context::new().ok()?;
-            let backend = ctx.acquire_best().ok()?;
-            Some(Speaker { backend, _ctx: ctx })
+            let backend = prism()?.create_best().ok()?;
+            Some(Speaker { backend })
         }
 
         pub fn speak(&mut self, text: &str) {

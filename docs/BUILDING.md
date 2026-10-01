@@ -136,22 +136,25 @@ also covers JAWS, ZoomText, UI Automation, OneCore, ZDSR and PC-Talker. This is
 what the CI artifact is built with, and what you want when you distribute a
 single file.
 
+NUtils uses Prism through the [prismer](https://github.com/trypsynth/prismer)
+crate, which vendors Prism's source and builds it with CMake. Its `static`
+feature links Prism into `nutils.exe`, and its build script matches Prism's CRT
+to rustc's (`+crt-static`, from `.cargo/config.toml`). It also publishes the
+screen-reader DLLs Prism's backends import, and `build.rs` delay-loads them so
+the exe starts on machines that don't have them.
+
 ```powershell
 .\scripts\build-speech.ps1           # all backends
 .\scripts\build-speech.ps1 -NoAtl    # skip the four backends that need ATL
 ```
 
-The script sets what the build needs: `PRISM_STATIC=1` (link Prism in rather
-than as a `prism.dll`) and `CMAKE_TOOLCHAIN_FILE` pointing at `cmake/prism.cmake`,
-which forces Prism's native build onto the **static** MSVC CRT. That last part
-matters: `.cargo/config.toml` builds with `+crt-static` while `prism-sys` pins
-`MultiThreadedDLL`, and mixing them fails the final link on unresolved
-`__imp__wassert` / `__imp__dtest`.
+The script points `CMAKE_TOOLCHAIN_FILE` at `cmake/prism.cmake`, which only
+chooses backends (see `-NoAtl` below).
 
 On top of the base requirements it needs:
 
-- **CMake** (as for the settings crate; libclang is *not* needed — `prism-sys`
-  ships pregenerated bindings).
+- **CMake 3.24+** and a C++23 compiler (current MSVC; libclang is *not*
+  needed — `prism-sys` ships pregenerated bindings).
 - The Visual Studio **"C++ ATL for latest build tools"** component (provides
   `atlbase.h`, needed by Prism's SAPI, JAWS, ZoomText and Sense Reader
   backends), installable with:
@@ -164,11 +167,8 @@ On top of the base requirements it needs:
   OneCore, ZDSR and PC-Talker are still built, and you give up JAWS, ZoomText and
   Prism's SAPI fallback (OneCore covers machines with no screen reader).
 
-To type-check the Prism path without building the native library at all:
-
-```sh
-PRISM_SYS_NO_NATIVE=1 cargo check -p nutils --features speech
-```
+To skip the CMake build, set `PRISM_LIB_DIR` to a folder holding a prebuilt
+static `prism.lib`.
 
 ### The default build — NVDA controller client, else SAPI
 

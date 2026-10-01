@@ -11,7 +11,6 @@ param([switch]$NoAtl)
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
-$env:PRISM_STATIC = "1"
 # Absolute: CMake resolves a relative toolchain path against its build dir.
 $env:CMAKE_TOOLCHAIN_FILE = Join-Path $root "cmake\prism.cmake"
 if ($NoAtl) { $env:NUTILS_PRISM_NO_ATL = "1" } else { Remove-Item Env:NUTILS_PRISM_NO_ATL -ErrorAction SilentlyContinue }

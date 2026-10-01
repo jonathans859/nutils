@@ -20,14 +20,16 @@ path = "src/main.rs"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 
-# Text-to-speech / screen-reader feedback via Prism. Optional because its native
-# build needs the Visual Studio "C++ ATL" component (plus CMake + libclang).
-# Build with `--features speech` to enable spoken feedback.
-prism = { git = "https://github.com/garo-pro/prism2rust", optional = true }
+# Text-to-speech / screen-reader feedback via Prism, through the prismer
+# bindings. Optional because its native build needs CMake and a C++23 compiler,
+# plus the Visual Studio "C++ ATL" component for some backends. Linked
+# statically, so nutils.exe needs no prism.dll beside it.
+# Build with `--features speech` to enable it.
+prismer = { version = "0.1.3", features = ["static"], optional = true }
 
 [features]
 default = []
-speech = ["dep:prism"]
+speech = ["dep:prismer"]
 
 [dependencies.windows]
 version = "0.62"

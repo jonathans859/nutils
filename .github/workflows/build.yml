@@ -53,13 +53,12 @@ jobs:
       - name: Test
         run: cargo test --release -p nutils
 
-      # The shipped nutils.exe speaks through Prism, which implements NVDA's RPC
-      # protocol itself -- so the artifact needs no nvdaControllerClient64.dll
-      # beside it. cmake/prism.cmake pins Prism to the static CRT to match this
-      # repo's +crt-static; PRISM_STATIC=1 links Prism in rather than as a DLL.
+      # The shipped nutils.exe speaks through Prism (via prismer, linked in
+      # statically), which implements NVDA's RPC protocol itself -- so the
+      # artifact needs no nvdaControllerClient64.dll beside it.
+      # cmake/prism.cmake only chooses backends; prismer matches the CRT.
       - name: Build nutils with Prism speech
         env:
-          PRISM_STATIC: "1"
           CMAKE_TOOLCHAIN_FILE: ${{ github.workspace }}\cmake\prism.cmake
         run: cargo build --release -p nutils --features speech
 

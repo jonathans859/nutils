@@ -5,7 +5,7 @@
 #   1. Rust crates, collected by cargo-about (about.toml / about.hbs).
 #   2. The C/C++ code those crates compile in, which cargo-about can't see:
 #      Prism's native library and the libraries it bundles (licenses shipped in
-#      its external/prism/LICENSES folder), and wxWidgets.
+#      its prism/LICENSES folder), and wxWidgets.
 #   3. Code copied into this repo from other projects (licenses/).
 #
 # Needs cargo-about on PATH. Usage: .\scripts\notices.ps1 [-Out path]
@@ -19,17 +19,17 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "cargo about failed" }
     $text = [System.Collections.Generic.List[string]]::new()
 
-    # Prism's native library: its folder sits two levels above the prism-sys crate.
+    # Prism's native library: vendored inside the prism-sys crate, in prism/.
     $meta = cargo metadata --format-version 1 --all-features | ConvertFrom-Json
     $prismSys = $meta.packages | Where-Object name -eq "prism-sys" | Select-Object -First 1
     if (-not $prismSys) { throw "prism-sys not found in cargo metadata" }
-    $licenses = Join-Path (Split-Path -Parent $prismSys.manifest_path) "..\..\external\prism\LICENSES"
+    $licenses = Join-Path (Split-Path -Parent $prismSys.manifest_path) "prism\LICENSES"
     if (-not (Test-Path $licenses)) { throw "Prism licenses not found at $licenses" }
     foreach ($dir in Get-ChildItem $licenses -Directory | Sort-Object Name) {
         foreach ($file in Get-ChildItem $dir.FullName -File | Sort-Object Name) {
             $text.Add($rule)
             $text.Add("$($dir.Name) ($($file.Name)), compiled into nutils.exe as part of Prism")
-            $text.Add("Prism source: https://github.com/garo-pro/prism2rust (external/prism)")
+            $text.Add("Prism source: https://github.com/ethindp/prism (vendored by https://github.com/trypsynth/prismer)")
             $text.Add("")
             $text.Add((Get-Content $file.FullName -Raw))
         }
