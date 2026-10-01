@@ -1,6 +1,6 @@
 [package]
 name = "nutils"
-version = "4.0.0"
+version = "4.0.1"
 edition = "2021"
 description = "Hotkey-controlled window manager for screen-reader users (modern Rust rewrite of NUtils)"
 license = "GPL-3.0-or-later"

@@ -1,6 +1,6 @@
 [package]
 name = "nutils-settings"
-version = "4.0.0"
+version = "4.0.1"
 edition = "2021"
 description = "Accessible settings dialog for NUtils (wxWidgets via wxDragon)"
 license = "GPL-3.0-or-later"

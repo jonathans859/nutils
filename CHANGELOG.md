@@ -3,6 +3,15 @@
 Each release's section here becomes its release notes on GitHub, which the
 update dialog shows. Start a new release with a `## <version>` heading.
 
+## 4.0.1
+
+- With the visual check on, Electron apps such as Joplin can now be made
+  transparent on the first try. They stay on screen for a few frames after the
+  change, and NUtils used to judge too early, report "stays visible" and undo
+  it; it now gives a window up to 300 ms to disappear.
+- Speech now goes through [prismer](https://github.com/trypsynth/prismer), the
+  maintained Rust bindings to Prism, with an up-to-date Prism underneath.
+
 ## 4.0.0
 
 The first release of NUtils 4, a complete rewrite of NUtils in Rust on the
