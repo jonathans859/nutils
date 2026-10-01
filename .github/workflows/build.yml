@@ -34,7 +34,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Rust (stable MSVC)
         uses: dtolnay/rust-toolchain@stable
@@ -67,7 +67,7 @@ jobs:
       # wxWidgets is only touched when the editor really needs rebuilding.
       - name: Reuse settings editor
         id: settings-exe
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: target/release/nutils-settings.exe
           key: settings-exe-${{ runner.os }}-${{ hashFiles('settings/**', 'src/config.rs', 'Cargo.lock', 'Cargo.toml', '.cargo/config.toml') }}
@@ -86,7 +86,7 @@ jobs:
       # first editor build after a quiet week is cold again.
       - name: Cache wxWidgets build
         if: steps.settings-exe.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .wxbuild
           key: wxwidgets-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
@@ -123,7 +123,7 @@ jobs:
             THIRD-PARTY-NOTICES.txt dist/
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           # Downloads as nutils.zip; each run keeps its own artifact.
           name: nutils
