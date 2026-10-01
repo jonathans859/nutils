@@ -11,6 +11,7 @@
 //! (every capture is black), and it only runs from a hotkey, when the window is
 //! the active one and so on screen.
 
+use std::time::{Duration, Instant};
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::Graphics::Dwm::{DwmFlush, DwmGetWindowAttribute, DWMWA_EXTENDED_FRAME_BOUNDS};
 use windows::Win32::Graphics::Gdi::{
@@ -31,6 +32,14 @@ const STEP: usize = 4;
 /// (Notepad over another Notepad); an untouched window leaves 100%. The margin
 /// absorbs a blinking caret.
 const STILL_VISIBLE: f64 = 0.98;
+
+/// How long a window that still looks unchanged gets to disappear. Electron
+/// apps (Chromium, e.g. Joplin) keep being drawn for some frames after they
+/// become layered, longer than the first few composition passes; judging them
+/// that early reverted a change that was about to take.
+const SETTLE: Duration = Duration::from_millis(300);
+/// The wait between captures while settling: about one 60Hz frame.
+const FRAME: Duration = Duration::from_millis(16);
 
 /// A sampled capture of the screen area a window covers.
 pub struct Snapshot {
@@ -76,6 +85,10 @@ pub fn snapshot(hwnd: HWND) -> Option<Snapshot> {
 
 /// After a change, wait for the screen to show it, capture the same area again
 /// and judge whether the window is still there.
+///
+/// A window that still looks the same is given until [`SETTLE`] to disappear
+/// before it counts as still visible, so a gone window is reported as soon as
+/// it's seen and only a window that really stays pays the full wait.
 pub fn compare(before: &Snapshot) -> Seen {
     // Each DwmFlush waits for one composition pass; a few make sure the change
     // has reached the screen, including for apps that repaint on the next frame.
@@ -84,9 +97,16 @@ pub fn compare(before: &Snapshot) -> Seen {
             let _ = DwmFlush();
         }
     }
-    match capture(&before.rect) {
-        Some(after) => judge(&before.pixels, &after),
-        None => Seen::Unknown,
+    let deadline = Instant::now() + SETTLE;
+    loop {
+        let seen = match capture(&before.rect) {
+            Some(after) => judge(&before.pixels, &after),
+            None => Seen::Unknown,
+        };
+        if seen != Seen::StillVisible || Instant::now() >= deadline {
+            return seen;
+        }
+        std::thread::sleep(FRAME);
     }
 }
 
