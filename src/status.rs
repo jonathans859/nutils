@@ -1,8 +1,9 @@
 //! Human-readable summaries of what is currently hidden.
 //!
-//! The same text serves two audiences: the tray menu shows [`brief`] as its top
-//! entry, and the status hotkey speaks either [`brief`] or [`detailed`] depending
-//! on the `detailed_status` setting. Everything here is phrased to be read aloud,
+//! The same text serves two audiences: the tray menu labels its hidden-window
+//! submenu with [`brief`], and the status hotkey speaks either [`brief`] or
+//! [`detailed`] depending on the `detailed_status` setting; the stack status
+//! hotkey speaks [`current`]. Everything here is phrased to be read aloud,
 //! so slots are announced as "position 1" using the digit the user actually
 //! presses (see [`slot_to_human`]) rather than the internal index.
 
@@ -71,6 +72,21 @@ pub fn detailed(stacks: &Stacks) -> String {
     text
 }
 
+/// The current stack and each window hidden in it, with its position and title.
+pub fn current(stacks: &Stacks) -> String {
+    let stack = stacks.current_stack();
+    let positions: Vec<String> = stacks
+        .occupied()
+        .into_iter()
+        .filter(|(i, _)| i / STACK_SIZE + 1 == stack)
+        .map(|(i, id)| format!("position {}, {}", slot_to_human(i % STACK_SIZE), window_name(id)))
+        .collect();
+    if positions.is_empty() {
+        return format!("Stack {stack}: nothing hidden.");
+    }
+    format!("Stack {stack}: {}.", positions.join("; "))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,6 +130,19 @@ mod tests {
              Stack 1: position 1, untitled window; position 0, untitled window. \
              Stack 2: position 2, untitled window."
         );
+    }
+
+    #[test]
+    fn current_names_only_the_current_stacks_positions() {
+        let mut s = stacks_with(&[0, 9, 11]);
+        assert_eq!(
+            current(&s),
+            "Stack 1: position 1, untitled window; position 0, untitled window."
+        );
+        s.shift = STACK_SIZE;
+        assert_eq!(current(&s), "Stack 2: position 2, untitled window.");
+        s.shift = 2 * STACK_SIZE;
+        assert_eq!(current(&s), "Stack 3: nothing hidden.");
     }
 
     #[test]

@@ -63,6 +63,8 @@ pub struct Hotkeys {
     pub unmanageapp: String,
     /// Speak how many windows are hidden in how many stacks.
     pub status: String,
+    /// Speak the position and title of each window hidden in the current stack.
+    pub stackstatus: String,
 }
 
 impl Default for Hotkeys {
@@ -81,6 +83,7 @@ impl Default for Hotkeys {
             manageapp: "a".into(),
             unmanageapp: "s".into(),
             status: "i".into(),
+            stackstatus: "c".into(),
         }
     }
 }

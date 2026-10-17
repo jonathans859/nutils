@@ -1,8 +1,8 @@
-//! System-tray icon and its right-click menu: a status line saying how many
-//! windows are hidden in how many stacks, a "Hidden" submenu listing every hidden
-//! window (grouped into per-stack submenus when they span several stacks), then
-//! the update items, Settings and Exit. When a newer release is known, the icon's
-//! text says so and the menu offers it right after the status line.
+//! System-tray icon and its right-click menu: a submenu named for how many
+//! windows are hidden in how many stacks, listing every hidden window (grouped
+//! into per-stack submenus when they span several stacks), then the update items,
+//! Settings and Exit. When a newer release is known, the icon's text says so and
+//! the menu offers it right after the hidden windows.
 
 use crate::stacks::{slot_to_human, Stacks, STACK_SIZE};
 use crate::{status, window};
@@ -112,15 +112,6 @@ pub fn show_menu(hwnd: HWND, stacks: &Stacks, update: Option<&str>) -> Option<Me
     unsafe {
         let menu = CreatePopupMenu().ok()?;
 
-        // The status line, first so a screen reader reads it as the menu opens.
-        // It stays selectable (rather than greyed, which readers announce as
-        // "unavailable") and choosing it speaks the full status.
-        append(menu, CMD_STATUS, &status::brief(stacks));
-        if let Some(version) = update {
-            append(menu, CMD_UPDATE, &format!("Update to {version} ..."));
-        }
-        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
-
         // Group hidden windows by their stack (BTreeMap keeps stacks in order).
         let mut by_stack: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         for (i, &id) in stacks.slots.iter().enumerate() {
@@ -129,9 +120,15 @@ pub fn show_menu(hwnd: HWND, stacks: &Stacks, update: Option<&str>) -> Option<Me
             }
         }
 
-        // A "Hidden" submenu. If the hidden windows span more than one stack, nest
-        // a submenu per stack inside it; otherwise list the windows directly.
-        if !by_stack.is_empty() {
+        // First, so a screen reader reads the status as the menu opens: a submenu
+        // of the hidden windows named for how many there are in how many stacks.
+        // If they span more than one stack, nest a submenu per stack inside it;
+        // otherwise list the windows directly. With nothing hidden there is no
+        // submenu, just the status line, kept selectable (rather than greyed,
+        // which readers announce as "unavailable"); choosing it speaks the status.
+        if by_stack.is_empty() {
+            append(menu, CMD_STATUS, &status::brief(stacks));
+        } else {
             let hidden = CreatePopupMenu().ok()?;
             let label = |i: usize| {
                 format!(
@@ -155,9 +152,12 @@ pub fn show_menu(hwnd: HWND, stacks: &Stacks, update: Option<&str>) -> Option<Me
                     append_submenu(hidden, sub, &format!("Stack {}", stack + 1));
                 }
             }
-            append_submenu(menu, hidden, "Hidden");
-            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
+            append_submenu(menu, hidden, &status::brief(stacks));
         }
+        if let Some(version) = update {
+            append(menu, CMD_UPDATE, &format!("Update to {version} ..."));
+        }
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
 
         append(menu, CMD_CHECK_UPDATES, "Check for updates ...");
         append(menu, CMD_SETTINGS, "Settings ...");

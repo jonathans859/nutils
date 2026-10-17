@@ -3,6 +3,14 @@
 Each release's section here becomes its release notes on GitHub, which the
 update dialog shows. Start a new release with a `## <version>` heading.
 
+## 4.2.0
+
+- A new hotkey, Shift+Alt+C, reads out the windows hidden in the current stack,
+  with their positions and titles, without going through every stack.
+- In the tray menu, the hidden windows' submenu is now named for how many are
+  hidden, such as "7 windows hidden in 2 stacks", instead of a separate line
+  above a submenu called "Hidden".
+
 ## 4.1.0
 
 - WinMurderer rules can now be managed in Settings, on a new WinMurderer tab,

@@ -27,9 +27,10 @@ is a complete rewrite in Rust on the native Win32 API.
   on screen first. Turn it off again and its windows become visible.
 - **Hidden-window status.** A hotkey tells you how many windows are hidden and in
   how many stacks. With *Detailed status* turned on, it also reads out every
-  hidden window by stack, slot and title.
-- **Tray menu.** Lists every hidden window, grouped by stack, so you can click one
-  to bring it back.
+  hidden window by stack, slot and title. Another hotkey reads out just the
+  windows in the stack you're on, with their positions and titles.
+- **Tray menu.** Lists every hidden window, grouped by stack, under a submenu
+  named for how many are hidden, so you can click one to bring it back.
 - **Rename a window** so you can tell apart windows that have the same title.
 - **Kill the active window's process** when an app stops responding.
 - **Set the active process's priority**, from low up to realtime.

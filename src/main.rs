@@ -44,7 +44,8 @@ const HK_UNMANAGEAPP: i32 = 27;
 const HK_STACKUP: i32 = 28;
 const HK_STACKDOWN: i32 = 29;
 const HK_STATUS: i32 = 30;
-const HK_MAX: i32 = 30;
+const HK_STACKSTATUS: i32 = 31;
+const HK_MAX: i32 = 31;
 
 struct App {
     hwnd: HWND,
@@ -252,6 +253,7 @@ impl App {
             HK_STACKUP => self.stack_shift(true),
             HK_STACKDOWN => self.stack_shift(false),
             HK_STATUS => self.announce_status(),
+            HK_STACKSTATUS => self.fb.status(&status::current(&self.stacks)),
             HK_CHTITLE => self.change_title(),
             HK_MANAGEAPP => self.manage_active_app(),
             HK_UNMANAGEAPP => self.unmanage_active_app(),
@@ -303,6 +305,7 @@ impl App {
         reg(HK_STACKUP, &hk.stackup);
         reg(HK_STACKDOWN, &hk.stackdown);
         reg(HK_STATUS, &hk.status);
+        reg(HK_STACKSTATUS, &hk.stackstatus);
     }
 
     // ---- window actions ---------------------------------------------------

@@ -44,6 +44,7 @@ enum Act {
     ManageApp,
     UnmanageApp,
     Status,
+    StackStatus,
 }
 
 /// What a row edits, which decides the shape of the Set Shortcut dialog.
@@ -71,6 +72,7 @@ const ROWS: &[(Act, &str, Kind)] = &[
     (Act::ManageApp, "Auto-transparent active window's app", Kind::Key),
     (Act::UnmanageApp, "Stop auto-transparenting active window's app", Kind::Key),
     (Act::Status, "Speak how many windows are hidden", Kind::Key),
+    (Act::StackStatus, "Speak the windows hidden in the current stack", Kind::Key),
 ];
 
 /// What a row is set to, independent of how config.toml stores it.
@@ -96,6 +98,7 @@ fn key_field(h: &mut Hotkeys, act: Act) -> Option<&mut String> {
         Act::ManageApp => &mut h.manageapp,
         Act::UnmanageApp => &mut h.unmanageapp,
         Act::Status => &mut h.status,
+        Act::StackStatus => &mut h.stackstatus,
         Act::Base | Act::Slots | Act::Priority => return None,
     })
 }
