@@ -1347,7 +1347,33 @@ fn main() {
         let usc = updates_cb;
         let chc = channel_choice;
         let save_frame = frame;
+        let save_notebook = notebook;
+        let save_keys = list;
         save.on_click(move |_| {
+            // Only the first of two actions on one key would get it; the other
+            // would silently never run.
+            let clashes = save_cfg.borrow().hotkeys.clashes();
+            if !clashes.is_empty() {
+                let lines: Vec<String> = clashes
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{} is set for both {} and {}.",
+                            display_spec(&c.spec, false),
+                            c.first.label(),
+                            c.second.label()
+                        )
+                    })
+                    .collect();
+                save_notebook.set_selection(1);
+                alert(
+                    &save_frame,
+                    &format!("{}\n\nChange one of them, then save again.", lines.join("\n")),
+                    "Shortcut Used Twice",
+                );
+                save_keys.set_focus();
+                return;
+            }
             save_cfg.borrow_mut().settings.stack_counter = sc.get_value();
             save_cfg.borrow_mut().settings.feedback = match fbc.get_selection() {
                 Some(1) => FeedbackMode::Text,
@@ -1410,15 +1436,18 @@ mod tests {
     }
 
     #[test]
-    fn defaults_all_use_the_base() {
+    fn defaults_use_the_base_except_kill() {
         let h = Hotkeys::default();
         for (act, _, kind) in ROWS {
             let b = get_binding(&h, *act);
-            match kind {
-                Kind::Base => assert_eq!(b, Binding::Own("!+".into())),
+            match (act, kind) {
+                (_, Kind::Base) => assert_eq!(b, Binding::Own("!+".into())),
+                // Base + F4 is a priority key, so kill has its own Win+F4.
+                (Act::WinKill, _) => assert_eq!(b, Binding::Own("#{f4}".into())),
                 _ => assert!(matches!(b, Binding::Base(_)), "a default that isn't base + key"),
             }
         }
+        assert_eq!(describe(&h, Act::WinKill, Kind::Key), "Win+F4, own shortcut");
         assert_eq!(describe(&h, Act::ChTitle, Kind::Key), "Alt+Shift+T");
         assert_eq!(describe(&h, Act::Slots, Kind::Mods("1–0")), "Alt+Shift+1–0");
         assert_eq!(describe(&h, Act::Base, Kind::Base), "Alt+Shift");

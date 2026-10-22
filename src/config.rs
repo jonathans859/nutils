@@ -79,7 +79,8 @@ impl Default for Hotkeys {
             transparent: "\\".into(),
             solid: "/".into(),
             firstavailhide: "h".into(),
-            winkill: "{f4}".into(),
+            // Its own shortcut: base + F4 is the "Below normal" priority key.
+            winkill: "#{f4}".into(),
             manageapp: "a".into(),
             unmanageapp: "s".into(),
             status: "i".into(),
@@ -123,6 +124,125 @@ impl Hotkeys {
         let mods = own.unwrap_or(base);
         has_modifiers(mods).then_some(mods)
     }
+
+    /// Every shortcut that is switched on, with its full spec, in the order
+    /// NUtils registers them: when two share a key, the earlier one gets it.
+    pub fn shortcuts(&self) -> Vec<(Action, String)> {
+        let mut out = Vec::new();
+        if let Some(mods) = self.slot_mods() {
+            for d in 0..10 {
+                out.push((Action::Slot(d), format!("{mods}{d}")));
+            }
+        }
+        if let Some(mods) = self.priority_mods() {
+            for i in 0..6 {
+                out.push((Action::Priority(i), format!("{mods}{{f{}}}", i + 3)));
+            }
+        }
+        for (action, binding) in [
+            (Action::ChTitle, &self.chtitle),
+            (Action::Transparent, &self.transparent),
+            (Action::Solid, &self.solid),
+            (Action::FirstAvail, &self.firstavailhide),
+            (Action::WinKill, &self.winkill),
+            (Action::ManageApp, &self.manageapp),
+            (Action::UnmanageApp, &self.unmanageapp),
+            (Action::StackUp, &self.stackup),
+            (Action::StackDown, &self.stackdown),
+            (Action::Status, &self.status),
+            (Action::StackStatus, &self.stackstatus),
+        ] {
+            if let Some(spec) = self.resolve(binding) {
+                out.push((action, spec));
+            }
+        }
+        out
+    }
+
+    /// Actions set to the same shortcut as an earlier one, which then never run.
+    pub fn clashes(&self) -> Vec<Clash> {
+        let all = self.shortcuts();
+        let mut out = Vec::new();
+        for (i, (action, spec)) in all.iter().enumerate() {
+            let key = shortcut_key(spec);
+            if let Some((first, _)) = all[..i].iter().find(|(_, s)| shortcut_key(s) == key) {
+                out.push(Clash {
+                    spec: spec.clone(),
+                    first: *first,
+                    second: *action,
+                });
+            }
+        }
+        out
+    }
+}
+
+/// A spec reduced to what Windows sees: the set of modifiers and the key, so
+/// `"!+t"` and `"+!T"` compare equal.
+fn shortcut_key(spec: &str) -> (Vec<char>, String) {
+    let key = spec.trim_start_matches(['^', '+', '#', '!']);
+    let mut mods: Vec<char> = spec[..spec.len() - key.len()].chars().collect();
+    mods.sort_unstable();
+    mods.dedup();
+    (mods, key.to_ascii_lowercase())
+}
+
+/// What a shortcut does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    /// Hide or unhide the slot on this digit key (0–9).
+    Slot(u32),
+    /// Set the active process's priority, 0 (low) to 5 (realtime): F3–F8.
+    Priority(usize),
+    ChTitle,
+    Transparent,
+    Solid,
+    FirstAvail,
+    WinKill,
+    ManageApp,
+    UnmanageApp,
+    StackUp,
+    StackDown,
+    Status,
+    StackStatus,
+}
+
+pub const PRIORITY_NAMES: [&str; 6] = [
+    "Low priority",
+    "Below normal priority",
+    "Normal priority",
+    "Above normal priority",
+    "High priority",
+    "Realtime priority",
+];
+
+impl Action {
+    /// The action's name, as the settings program lists it.
+    pub fn label(self) -> String {
+        match self {
+            Action::Slot(d) => format!("Hide/unhide slot {d}"),
+            Action::Priority(i) => PRIORITY_NAMES[i].to_string(),
+            Action::ChTitle => "Change window title".into(),
+            Action::Transparent => "Make window transparent".into(),
+            Action::Solid => "Make window solid".into(),
+            Action::FirstAvail => "Hide in first free slot".into(),
+            Action::WinKill => "Kill active window".into(),
+            Action::ManageApp => "Auto-transparent active window's app".into(),
+            Action::UnmanageApp => "Stop auto-transparenting active window's app".into(),
+            Action::StackUp => "Next stack".into(),
+            Action::StackDown => "Previous stack".into(),
+            Action::Status => "Speak how many windows are hidden".into(),
+            Action::StackStatus => "Speak the windows hidden in the current stack".into(),
+        }
+    }
+}
+
+/// Two actions set to the same shortcut: only `first` gets it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Clash {
+    pub spec: String,
+    pub first: Action,
+    pub second: Action,
 }
 
 /// How NUtils reports actions back to the user.
@@ -288,6 +408,59 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn defaults_have_no_clashes() {
+        assert_eq!(Hotkeys::default().clashes(), vec![]);
+    }
+
+    #[test]
+    fn kill_on_base_f4_clashes_with_a_priority_key() {
+        let h = Hotkeys {
+            winkill: "{f4}".into(),
+            ..Hotkeys::default()
+        };
+        assert_eq!(
+            h.clashes(),
+            vec![Clash {
+                spec: "!+{f4}".into(),
+                first: Action::Priority(1),
+                second: Action::WinKill,
+            }]
+        );
+    }
+
+    #[test]
+    fn a_windows_base_clashes_with_the_default_kill_key() {
+        let h = Hotkeys {
+            base: "#".into(),
+            ..Hotkeys::default()
+        };
+        let clashes = h.clashes();
+        assert_eq!(clashes.len(), 1);
+        assert_eq!((clashes[0].first, clashes[0].second), (Action::Priority(1), Action::WinKill));
+    }
+
+    #[test]
+    fn modifier_order_and_key_case_do_not_hide_a_clash() {
+        let h = Hotkeys {
+            chtitle: "+!T".into(),
+            ..Hotkeys::default()
+        };
+        assert_eq!(h.clashes().len(), 0);
+        let h = Hotkeys {
+            solid: "+!T".into(),
+            ..Hotkeys::default()
+        };
+        assert_eq!(
+            h.clashes(),
+            vec![Clash {
+                spec: "+!T".into(),
+                first: Action::ChTitle,
+                second: Action::Solid,
+            }]
+        );
+    }
 
     #[test]
     fn bare_key_uses_the_base() {

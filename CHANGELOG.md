@@ -10,10 +10,18 @@ update dialog shows. Start a new release with a `## <version>` heading.
 - In the tray menu, the hidden windows' submenu is now named for how many are
   hidden, such as "7 windows hidden in 2 stacks", instead of a separate line
   above a submenu called "Hidden".
+- The kill shortcut now defaults to Win+F4 again. Base modifier + F4 is also
+  the "Below normal" priority key, so with the defaults the kill shortcut never
+  worked: pressing it changed the priority instead. If you set up NUtils
+  before this version, your config still has the old kill shortcut; set a new
+  one under Keybindings in Settings.
+- When two actions share a shortcut, NUtils now says so when it starts and when
+  settings are reloaded, such as "Win+F4 is set for both Below normal priority
+  and Kill active window", and Settings won't save shortcuts that clash. Before,
+  only the first action worked and the other silently did nothing.
 - If a shortcut can't be used because Windows or another program already has
-  it, NUtils now says so when it starts and when settings are reloaded, such
-  as "Win+F4 is already in use by Windows or another program". Before, that
-  shortcut just didn't work.
+  it, NUtils now says so as well, such as "Win+T is already in use by Windows
+  or another program". Before, that shortcut just didn't work.
 - The kill hotkey now tells you when the app wasn't killed: for example, an
   app running as administrator, which NUtils isn't allowed to close. Before,
   nothing happened. "Killed" is now only said once the app has really closed.

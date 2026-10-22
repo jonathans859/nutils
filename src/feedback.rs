@@ -8,7 +8,7 @@
 //! Visual Studio ATL component to build.) When no speaker at all is available,
 //! `Text` mode falls back to beeps so feedback is never silent.
 
-use crate::config::FeedbackMode;
+use crate::config::{Clash, FeedbackMode, PRIORITY_NAMES};
 use crate::hotkeys;
 use crate::sound;
 
@@ -199,10 +199,10 @@ impl Feedback {
             sound::refused();
         }
     }
-    /// `taken` lists the shortcuts that could not be registered. They are always
-    /// spoken, like the status: a beep can't say which keys don't work.
-    pub fn reloaded(&mut self, taken: &[String]) {
-        match taken_message(taken) {
+    /// Shortcut problems are always spoken, like the status: a beep can't say
+    /// which keys don't work.
+    pub fn reloaded(&mut self, problems: &ShortcutProblems) {
+        match problems.message() {
             Some(msg) => self.status(&format!("Configuration reloaded. {msg}")),
             None => {
                 self.speak("Configuration reloaded");
@@ -229,13 +229,12 @@ impl Feedback {
     /// Startup announcement: always a beep AND spoken "NUtils ready", regardless of
     /// the configured feedback mode (so it is unmistakable that NUtils is running).
     /// Speaks first so the voice overlaps the ascending tone. `recovered` is how
-    /// many lost hidden windows were taken back at startup; `taken` lists the
-    /// shortcuts that could not be registered.
-    pub fn ready(&mut self, recovered: usize, taken: &[String]) {
+    /// many lost hidden windows were taken back at startup.
+    pub fn ready(&mut self, recovered: usize, problems: &ShortcutProblems) {
         if self.speaker.is_none() {
             self.speaker = Speaker::new();
         }
-        let taken = taken_message(taken);
+        let problems = problems.message();
         if let Some(s) = &mut self.speaker {
             let mut text = match recovered {
                 0 => "NUtils ready".to_string(),
@@ -243,15 +242,44 @@ impl Feedback {
                 n => format!("NUtils ready, recovered {n} hidden windows"),
             };
             // One announcement: a second one would cut this one off.
-            if let Some(msg) = &taken {
+            if let Some(msg) = &problems {
                 text = format!("{text}. {msg}");
             }
             s.speak(&text);
         }
         sound::startup();
-        if taken.is_some() && self.speaker.is_none() {
+        if problems.is_some() && self.speaker.is_none() {
             sound::refused();
         }
+    }
+}
+
+/// Shortcuts that don't work, as found when they were registered.
+#[derive(Default)]
+pub struct ShortcutProblems {
+    /// Set for two actions; only the first one gets the key.
+    pub clashes: Vec<Clash>,
+    /// Specs (`#{f4}`) Windows wouldn't register: something else has the key.
+    pub taken: Vec<String>,
+}
+
+impl ShortcutProblems {
+    /// One sentence per problem, or `None` when every shortcut works.
+    fn message(&self) -> Option<String> {
+        let mut parts: Vec<String> = self
+            .clashes
+            .iter()
+            .map(|c| {
+                format!(
+                    "{} is set for both {} and {}",
+                    hotkeys::display(&c.spec),
+                    c.first.label(),
+                    c.second.label()
+                )
+            })
+            .collect();
+        parts.extend(taken_message(&self.taken));
+        (!parts.is_empty()).then(|| parts.join(". "))
     }
 }
 
@@ -278,15 +306,10 @@ fn taken_message(taken: &[String]) -> Option<String> {
 }
 
 fn priority_name(index: i32) -> &'static str {
-    match index {
-        0 => "Low priority",
-        1 => "Below normal priority",
-        2 => "Normal priority",
-        3 => "Above normal priority",
-        4 => "High priority",
-        5 => "Realtime priority",
-        _ => "Priority changed",
-    }
+    usize::try_from(index)
+        .ok()
+        .and_then(|i| PRIORITY_NAMES.get(i))
+        .unwrap_or(&"Priority changed")
 }
 
 // ---------------------------------------------------------------------------
@@ -439,6 +462,25 @@ mod tests {
 
     fn specs(s: &[&str]) -> Vec<String> {
         s.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn names_both_actions_of_a_clash() {
+        use crate::config::Action;
+        let problems = ShortcutProblems {
+            clashes: vec![Clash {
+                spec: "#{f4}".into(),
+                first: Action::Priority(1),
+                second: Action::WinKill,
+            }],
+            taken: specs(&["#t"]),
+        };
+        assert_eq!(
+            problems.message().unwrap(),
+            "Win+F4 is set for both Below normal priority and Kill active window. \
+             Win+T is already in use by Windows or another program"
+        );
+        assert_eq!(ShortcutProblems::default().message(), None);
     }
 
     #[test]

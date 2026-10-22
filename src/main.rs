@@ -16,7 +16,7 @@ mod visual;
 mod window;
 mod winevent;
 
-use config::{Config, MatchKind};
+use config::{Action, Config, MatchKind};
 use state::ManagedApp;
 use stacks::{human_to_slot, Stacks, STACK_SIZE};
 use std::cell::RefCell;
@@ -46,6 +46,24 @@ const HK_STACKDOWN: i32 = 29;
 const HK_STATUS: i32 = 30;
 const HK_STACKSTATUS: i32 = 31;
 const HK_MAX: i32 = 31;
+
+fn hotkey_id(action: Action) -> i32 {
+    match action {
+        Action::Slot(d) => HK_DIGIT_BASE + d as i32,
+        Action::Priority(i) => HK_PRIO_BASE + i as i32,
+        Action::ChTitle => HK_CHTITLE,
+        Action::Transparent => HK_TRANSPARENT,
+        Action::Solid => HK_SOLID,
+        Action::FirstAvail => HK_FIRSTAVAIL,
+        Action::WinKill => HK_WINKILL,
+        Action::ManageApp => HK_MANAGEAPP,
+        Action::UnmanageApp => HK_UNMANAGEAPP,
+        Action::StackUp => HK_STACKUP,
+        Action::StackDown => HK_STACKDOWN,
+        Action::Status => HK_STATUS,
+        Action::StackStatus => HK_STACKSTATUS,
+    }
+}
 
 /// How long the kill hotkey waits for the process to exit before saying it
 /// didn't. A normal kill finishes in milliseconds.
@@ -165,11 +183,11 @@ fn main() {
         auto_failed: std::collections::HashSet::new(),
         config_mtime: config_mtime(),
     };
-    let taken = app.set_hotkeys(true);
+    let problems = app.set_hotkeys(true);
     if recovered > 0 {
         app.save_state();
     }
-    app.fb.ready(recovered, &taken); // startup: beep + "NUtils ready"
+    app.fb.ready(recovered, &problems); // startup: beep + "NUtils ready"
     if app.cfg.settings.check_for_updates {
         update::check_in_background(hwnd);
     }
@@ -265,56 +283,33 @@ impl App {
         }
     }
 
-    /// (De)register every global hotkey from the current config. Returns the
-    /// specs Windows wouldn't register — almost always because another program
-    /// (or another NUtils shortcut) already has that key.
-    fn set_hotkeys(&self, enable: bool) -> Vec<String> {
+    /// (De)register every global hotkey from the current config. Returns what
+    /// didn't work: shortcuts set for two actions (only the first gets it), and
+    /// shortcuts Windows wouldn't register because something else has the key.
+    fn set_hotkeys(&self, enable: bool) -> feedback::ShortcutProblems {
         let h = Some(self.hwnd);
         for id in 1..=HK_MAX {
             unsafe {
                 let _ = UnregisterHotKey(h, id);
             }
         }
-        let mut taken = Vec::new();
+        let mut problems = feedback::ShortcutProblems::default();
         if !enable {
-            return taken;
+            return problems;
         }
         let hk = &self.cfg.hotkeys;
-        let mut register = |id: i32, spec: &str| {
-            if let Some(k) = hotkeys::parse(spec) {
-                if unsafe { RegisterHotKey(h, id, k.mods, k.vk) }.is_err() {
-                    taken.push(spec.to_string());
+        problems.clashes = hk.clashes();
+        for (action, spec) in hk.shortcuts() {
+            if problems.clashes.iter().any(|c| c.second == action) {
+                continue; // its key went to an earlier action
+            }
+            if let Some(k) = hotkeys::parse(&spec) {
+                if unsafe { RegisterHotKey(h, hotkey_id(action), k.mods, k.vk) }.is_err() {
+                    problems.taken.push(spec);
                 }
             }
-        };
-        if let Some(mods) = hk.slot_mods() {
-            for d in 0..10i32 {
-                register(HK_DIGIT_BASE + d, &format!("{mods}{d}"));
-            }
         }
-        if let Some(mods) = hk.priority_mods() {
-            for i in 0..6i32 {
-                register(HK_PRIO_BASE + i, &format!("{mods}{{f{}}}", i + 3));
-            }
-        }
-        for (id, binding) in [
-            (HK_CHTITLE, &hk.chtitle),
-            (HK_TRANSPARENT, &hk.transparent),
-            (HK_SOLID, &hk.solid),
-            (HK_FIRSTAVAIL, &hk.firstavailhide),
-            (HK_WINKILL, &hk.winkill),
-            (HK_MANAGEAPP, &hk.manageapp),
-            (HK_UNMANAGEAPP, &hk.unmanageapp),
-            (HK_STACKUP, &hk.stackup),
-            (HK_STACKDOWN, &hk.stackdown),
-            (HK_STATUS, &hk.status),
-            (HK_STACKSTATUS, &hk.stackstatus),
-        ] {
-            if let Some(spec) = hk.resolve(binding) {
-                register(id, &spec);
-            }
-        }
-        taken
+        problems
     }
 
     // ---- window actions ---------------------------------------------------
@@ -524,8 +519,8 @@ impl App {
         self.cfg = Config::load_or_init();
         self.fb.set_mode(self.cfg.settings.feedback);
         self.config_mtime = config_mtime();
-        let taken = self.set_hotkeys(true);
-        self.fb.reloaded(&taken);
+        let problems = self.set_hotkeys(true);
+        self.fb.reloaded(&problems);
     }
 
     /// Add the active window's owning app to the managed (auto-transparent) list.
