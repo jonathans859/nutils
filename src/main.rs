@@ -47,6 +47,10 @@ const HK_STATUS: i32 = 30;
 const HK_STACKSTATUS: i32 = 31;
 const HK_MAX: i32 = 31;
 
+/// How long the kill hotkey waits for the process to exit before saying it
+/// didn't. A normal kill finishes in milliseconds.
+const KILL_WAIT_MS: u32 = 1000;
+
 struct App {
     hwnd: HWND,
     cfg: Config,
@@ -161,11 +165,11 @@ fn main() {
         auto_failed: std::collections::HashSet::new(),
         config_mtime: config_mtime(),
     };
-    app.set_hotkeys(true);
+    let taken = app.set_hotkeys(true);
     if recovered > 0 {
         app.save_state();
     }
-    app.fb.ready(recovered); // startup: beep + "NUtils ready"
+    app.fb.ready(recovered, &taken); // startup: beep + "NUtils ready"
     if app.cfg.settings.check_for_updates {
         update::check_in_background(hwnd);
     }
@@ -261,28 +265,26 @@ impl App {
         }
     }
 
-    /// (De)register every global hotkey from the current config.
-    fn set_hotkeys(&self, enable: bool) {
+    /// (De)register every global hotkey from the current config. Returns the
+    /// specs Windows wouldn't register — almost always because another program
+    /// (or another NUtils shortcut) already has that key.
+    fn set_hotkeys(&self, enable: bool) -> Vec<String> {
         let h = Some(self.hwnd);
         for id in 1..=HK_MAX {
             unsafe {
                 let _ = UnregisterHotKey(h, id);
             }
         }
+        let mut taken = Vec::new();
         if !enable {
-            return;
+            return taken;
         }
         let hk = &self.cfg.hotkeys;
-        let register = |id: i32, spec: &str| {
+        let mut register = |id: i32, spec: &str| {
             if let Some(k) = hotkeys::parse(spec) {
-                unsafe {
-                    let _ = RegisterHotKey(h, id, k.mods, k.vk);
+                if unsafe { RegisterHotKey(h, id, k.mods, k.vk) }.is_err() {
+                    taken.push(spec.to_string());
                 }
-            }
-        };
-        let reg = |id: i32, binding: &str| {
-            if let Some(spec) = hk.resolve(binding) {
-                register(id, &spec);
             }
         };
         if let Some(mods) = hk.slot_mods() {
@@ -295,17 +297,24 @@ impl App {
                 register(HK_PRIO_BASE + i, &format!("{mods}{{f{}}}", i + 3));
             }
         }
-        reg(HK_CHTITLE, &hk.chtitle);
-        reg(HK_TRANSPARENT, &hk.transparent);
-        reg(HK_SOLID, &hk.solid);
-        reg(HK_FIRSTAVAIL, &hk.firstavailhide);
-        reg(HK_WINKILL, &hk.winkill);
-        reg(HK_MANAGEAPP, &hk.manageapp);
-        reg(HK_UNMANAGEAPP, &hk.unmanageapp);
-        reg(HK_STACKUP, &hk.stackup);
-        reg(HK_STACKDOWN, &hk.stackdown);
-        reg(HK_STATUS, &hk.status);
-        reg(HK_STACKSTATUS, &hk.stackstatus);
+        for (id, binding) in [
+            (HK_CHTITLE, &hk.chtitle),
+            (HK_TRANSPARENT, &hk.transparent),
+            (HK_SOLID, &hk.solid),
+            (HK_FIRSTAVAIL, &hk.firstavailhide),
+            (HK_WINKILL, &hk.winkill),
+            (HK_MANAGEAPP, &hk.manageapp),
+            (HK_UNMANAGEAPP, &hk.unmanageapp),
+            (HK_STACKUP, &hk.stackup),
+            (HK_STACKDOWN, &hk.stackdown),
+            (HK_STATUS, &hk.status),
+            (HK_STACKSTATUS, &hk.stackstatus),
+        ] {
+            if let Some(spec) = hk.resolve(binding) {
+                register(id, &spec);
+            }
+        }
+        taken
     }
 
     // ---- window actions ---------------------------------------------------
@@ -399,8 +408,11 @@ impl App {
     }
 
     fn kill_active(&mut self) {
-        if window::kill_owner(root(window::foreground())) {
-            self.fb.killed();
+        match window::kill_owner(root(window::foreground()), KILL_WAIT_MS) {
+            window::Kill::Killed => self.fb.killed(),
+            window::Kill::Denied => self.fb.kill_denied(),
+            window::Kill::StillRunning => self.fb.kill_pending(),
+            window::Kill::Failed => self.fb.kill_failed(),
         }
     }
 
@@ -512,8 +524,8 @@ impl App {
         self.cfg = Config::load_or_init();
         self.fb.set_mode(self.cfg.settings.feedback);
         self.config_mtime = config_mtime();
-        self.set_hotkeys(true);
-        self.fb.reloaded();
+        let taken = self.set_hotkeys(true);
+        self.fb.reloaded(&taken);
     }
 
     /// Add the active window's owning app to the managed (auto-transparent) list.

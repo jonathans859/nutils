@@ -109,9 +109,66 @@ pub fn parse(spec: &str) -> Option<Hotkey> {
     Some(Hotkey { mods, vk })
 }
 
+/// A binding as the user would read it, e.g. `"#+t"` -> "Win+Shift+T" — the same
+/// form the settings program shows.
+pub fn display(spec: &str) -> String {
+    let (mods, key) = split_mods(spec);
+    let mut parts: Vec<String> = [
+        (MOD_WIN, "Win"),
+        (MOD_CONTROL, "Ctrl"),
+        (MOD_ALT, "Alt"),
+        (MOD_SHIFT, "Shift"),
+    ]
+    .into_iter()
+    .filter(|&(flag, _)| mods & flag == flag)
+    .map(|(_, name)| name.to_string())
+    .collect();
+    parts.push(key_name(key));
+    parts.join("+")
+}
+
+/// A key token (`{f4}`, `{pgup}`, `t`) as a key name ("F4", "PageUp", "T").
+fn key_name(key: &str) -> String {
+    let Some(inner) = key.strip_prefix('{').and_then(|k| k.strip_suffix('}')) else {
+        return key.to_uppercase();
+    };
+    match inner.to_ascii_lowercase().as_str() {
+        "esc" | "escape" => "Escape",
+        "enter" | "return" => "Enter",
+        "tab" => "Tab",
+        "bs" | "back" | "backspace" => "Backspace",
+        "space" => "Space",
+        "del" | "delete" => "Delete",
+        "ins" | "insert" => "Insert",
+        "home" => "Home",
+        "end" => "End",
+        "pgup" => "PageUp",
+        "pgdn" => "PageDown",
+        "up" => "Up",
+        "down" => "Down",
+        "left" => "Left",
+        "right" => "Right",
+        "add" => "Num+",
+        "subtract" => "Num-",
+        "multiply" => "Num*",
+        "divide" => "Num/",
+        "decimal" => "Num.",
+        other => return other.to_uppercase(),
+    }
+    .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn displays_readably() {
+        assert_eq!(display("#{f4}"), "Win+F4");
+        assert_eq!(display("!+t"), "Alt+Shift+T");
+        assert_eq!(display("^+{pgup}"), "Ctrl+Shift+PageUp");
+        assert_eq!(display("#\\"), "Win+\\");
+    }
 
     #[test]
     fn parses_win_shift_t() {

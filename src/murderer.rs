@@ -26,7 +26,8 @@ pub fn sweep(rules: &[Rule]) {
                 match rule.degree {
                     Degree::Close => window::close(hwnd),
                     Degree::Kill => {
-                        window::kill_owner(hwnd);
+                        // Silent, and no wait: the next sweep tries again.
+                        window::kill_owner(hwnd, 0);
                     }
                 }
                 break;

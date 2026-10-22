@@ -2,7 +2,9 @@
 //! All of these must be called from the GUI thread that owns the message loop.
 
 use windows::core::{w, PCWSTR, PWSTR};
-use windows::Win32::Foundation::{CloseHandle, COLORREF, HANDLE, HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{
+    CloseHandle, COLORREF, E_ACCESSDENIED, HANDLE, HWND, LPARAM, WAIT_OBJECT_0, WPARAM,
+};
 use windows::Win32::Graphics::Gdi::{
     RedrawWindow, RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE,
 };
@@ -390,19 +392,44 @@ pub fn owner_exe(hwnd: HWND) -> Option<String> {
     }
 }
 
-/// Forcefully terminate the process owning `hwnd`.
-pub fn kill_owner(hwnd: HWND) -> bool {
-    let pid = owner_pid(hwnd);
+/// How a [`kill_owner`] went.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kill {
+    /// The process has exited.
+    Killed,
+    /// Windows refused: typically an app running as administrator.
+    Denied,
+    /// Terminated, but the process hadn't exited within the wait.
+    StillRunning,
+    /// No process to kill, or terminating it failed for another reason.
+    Failed,
+}
+
+/// Forcefully terminate the process owning `hwnd`, then wait up to `wait_ms` for
+/// it to exit. Termination is asynchronous, so `Killed` is only reported once the
+/// process is really gone.
+pub fn kill_owner(hwnd: HWND, wait_ms: u32) -> Kill {
+    kill_pid(owner_pid(hwnd), wait_ms)
+}
+
+fn kill_pid(pid: u32, wait_ms: u32) -> Kill {
     if pid == 0 {
-        return false;
+        return Kill::Failed;
     }
     unsafe {
-        let Ok(handle) = OpenProcess(PROCESS_TERMINATE, false, pid) else {
-            return false;
+        let handle = match OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, false, pid) {
+            Ok(h) => h,
+            Err(e) if e.code() == E_ACCESSDENIED => return Kill::Denied,
+            Err(_) => return Kill::Failed,
         };
-        let ok = TerminateProcess(handle, 1).is_ok();
+        let result = match TerminateProcess(handle, 1) {
+            Err(e) if e.code() == E_ACCESSDENIED => Kill::Denied,
+            Err(_) => Kill::Failed,
+            Ok(()) if WaitForSingleObject(handle, wait_ms) == WAIT_OBJECT_0 => Kill::Killed,
+            Ok(()) => Kill::StillRunning,
+        };
         let _ = CloseHandle(handle);
-        ok
+        result
     }
 }
 
@@ -740,5 +767,26 @@ mod focus_restore {
         }
         std::thread::sleep(Duration::from_millis(500));
         let _ = child.kill();
+    }
+}
+
+#[cfg(test)]
+mod kill {
+    use super::*;
+
+    #[test]
+    fn reports_a_process_gone_only_once_it_exited() {
+        let mut child = std::process::Command::new("ping")
+            .args(["-n", "30", "127.0.0.1"])
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        assert_eq!(kill_pid(child.id(), 1000), Kill::Killed);
+        assert_eq!(child.try_wait().unwrap().and_then(|s| s.code()), Some(1));
+    }
+
+    #[test]
+    fn no_process_is_a_failure() {
+        assert_eq!(kill_pid(0, 0), Kill::Failed);
     }
 }

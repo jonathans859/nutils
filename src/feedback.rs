@@ -9,6 +9,7 @@
 //! `Text` mode falls back to beeps so feedback is never silent.
 
 use crate::config::FeedbackMode;
+use crate::hotkeys;
 use crate::sound;
 
 pub struct Feedback {
@@ -123,6 +124,26 @@ impl Feedback {
             sound::killed();
         }
     }
+    /// Windows refused to end the app — typically one running as administrator.
+    pub fn kill_denied(&mut self) {
+        self.speak("Could not kill this app, it may be running as administrator");
+        if self.should_beep() {
+            sound::kill_error();
+        }
+    }
+    /// The kill went through, but the app still hadn't exited after the wait.
+    pub fn kill_pending(&mut self) {
+        self.speak("This app is still running");
+        if self.should_beep() {
+            sound::kill_error();
+        }
+    }
+    pub fn kill_failed(&mut self) {
+        self.speak("Could not kill this app");
+        if self.should_beep() {
+            sound::kill_error();
+        }
+    }
     pub fn disappeared(&mut self) {
         self.speak("Window gone");
         if self.should_beep() {
@@ -178,10 +199,17 @@ impl Feedback {
             sound::refused();
         }
     }
-    pub fn reloaded(&mut self) {
-        self.speak("Configuration reloaded");
-        if self.should_beep() {
-            sound::notify();
+    /// `taken` lists the shortcuts that could not be registered. They are always
+    /// spoken, like the status: a beep can't say which keys don't work.
+    pub fn reloaded(&mut self, taken: &[String]) {
+        match taken_message(taken) {
+            Some(msg) => self.status(&format!("Configuration reloaded. {msg}")),
+            None => {
+                self.speak("Configuration reloaded");
+                if self.should_beep() {
+                    sound::notify();
+                }
+            }
         }
     }
 
@@ -201,20 +229,52 @@ impl Feedback {
     /// Startup announcement: always a beep AND spoken "NUtils ready", regardless of
     /// the configured feedback mode (so it is unmistakable that NUtils is running).
     /// Speaks first so the voice overlaps the ascending tone. `recovered` is how
-    /// many lost hidden windows were taken back at startup.
-    pub fn ready(&mut self, recovered: usize) {
+    /// many lost hidden windows were taken back at startup; `taken` lists the
+    /// shortcuts that could not be registered.
+    pub fn ready(&mut self, recovered: usize, taken: &[String]) {
         if self.speaker.is_none() {
             self.speaker = Speaker::new();
         }
+        let taken = taken_message(taken);
         if let Some(s) = &mut self.speaker {
-            s.speak(&match recovered {
+            let mut text = match recovered {
                 0 => "NUtils ready".to_string(),
                 1 => "NUtils ready, recovered 1 hidden window".to_string(),
                 n => format!("NUtils ready, recovered {n} hidden windows"),
-            });
+            };
+            // One announcement: a second one would cut this one off.
+            if let Some(msg) = &taken {
+                text = format!("{text}. {msg}");
+            }
+            s.speak(&text);
         }
         sound::startup();
+        if taken.is_some() && self.speaker.is_none() {
+            sound::refused();
+        }
     }
+}
+
+/// How many shortcuts to name before summarising the rest.
+const TAKEN_NAMED: usize = 3;
+
+/// "Win+F4 is already in use by Windows or another program", or `None` when
+/// nothing is taken. `taken` holds the bindings' specs (`#{f4}`).
+fn taken_message(taken: &[String]) -> Option<String> {
+    let names: Vec<String> = taken.iter().map(|s| hotkeys::display(s)).collect();
+    Some(match names.as_slice() {
+        [] => return None,
+        [one] => format!("{one} is already in use by Windows or another program"),
+        [rest @ .., last] if names.len() <= TAKEN_NAMED => format!(
+            "{} and {last} are already in use by Windows or other programs",
+            rest.join(", ")
+        ),
+        _ => format!(
+            "{} shortcuts are already in use by Windows or other programs, including {}",
+            names.len(),
+            names[..TAKEN_NAMED].join(", ")
+        ),
+    })
 }
 
 fn priority_name(index: i32) -> &'static str {
@@ -372,3 +432,29 @@ mod speaker_impl {
 }
 
 use speaker_impl::Speaker;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn specs(s: &[&str]) -> Vec<String> {
+        s.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn names_taken_shortcuts() {
+        assert_eq!(taken_message(&[]), None);
+        assert_eq!(
+            taken_message(&specs(&["#{f4}"])).unwrap(),
+            "Win+F4 is already in use by Windows or another program"
+        );
+        assert_eq!(
+            taken_message(&specs(&["#{f4}", "#t", "#h"])).unwrap(),
+            "Win+F4, Win+T and Win+H are already in use by Windows or other programs"
+        );
+        assert_eq!(
+            taken_message(&specs(&["#{f4}", "#t", "#h", "#a"])).unwrap(),
+            "4 shortcuts are already in use by Windows or other programs, including Win+F4, Win+T, Win+H"
+        );
+    }
+}

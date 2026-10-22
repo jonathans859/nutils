@@ -189,6 +189,13 @@ pub fn startup() {
 pub fn killed() {
     play_or("kill", || beep(60, 300));
 }
+/// The kill didn't take: the app is still running.
+pub fn kill_error() {
+    play_or("killEr", || {
+        tone(220, 90);
+        tone(147, 150);
+    });
+}
 pub fn disappeared() {
     play_or("Disappear", || beep(120, 80));
 }
