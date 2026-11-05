@@ -4,8 +4,9 @@
 //! submenu with [`brief`], and the status hotkey speaks either [`brief`] or
 //! [`detailed`] depending on the `detailed_status` setting; the stack status
 //! hotkey speaks [`current`]. Everything here is phrased to be read aloud,
-//! so slots are announced as "position 1" using the digit the user actually
-//! presses (see [`slot_to_human`]) rather than the internal index.
+//! so a hidden window is announced by the digit the user actually presses to
+//! bring it back (see [`slot_to_human`]) rather than the internal index — just
+//! the number, as in "1, Notepad", with no word in front to listen past.
 
 use crate::stacks::{slot_to_human, Stacks, STACK_SIZE};
 use crate::window::{self, WinId};
@@ -30,6 +31,38 @@ pub fn window_name(id: WinId) -> String {
     window::owner_exe(hwnd).unwrap_or_else(|| "untitled window".into())
 }
 
+/// What a hidden window is besides hidden, for the `window_states` setting:
+/// transparent, minimized, maximized, not responding. Empty when it's none of them.
+pub fn window_states(id: WinId) -> Vec<&'static str> {
+    let hwnd = window::from_id(id);
+    let mut states = Vec::new();
+    if window::is_transparent(hwnd) {
+        states.push("transparent");
+    }
+    if window::is_minimized(hwnd) {
+        states.push("minimized");
+    } else if window::is_maximized(hwnd) {
+        states.push("maximized");
+    }
+    if window::is_hung(hwnd) {
+        states.push("not responding");
+    }
+    states
+}
+
+/// One hidden window as listed in a stack: "1, Notepad", and with `states`,
+/// "1, Notepad, transparent, minimized".
+fn entry(slot: usize, id: WinId, states: bool) -> String {
+    let mut text = format!("{}, {}", slot_to_human(slot % STACK_SIZE), window_name(id));
+    if states {
+        for state in window_states(id) {
+            text.push_str(", ");
+            text.push_str(state);
+        }
+    }
+    text
+}
+
 /// One line: how many windows are hidden across how many stacks.
 pub fn brief(stacks: &Stacks) -> String {
     let hidden = stacks.occupied().len();
@@ -44,8 +77,8 @@ pub fn brief(stacks: &Stacks) -> String {
 }
 
 /// [`brief`], plus the current stack and every hidden window with its position and
-/// title, grouped by stack.
-pub fn detailed(stacks: &Stacks) -> String {
+/// title, grouped by stack — and with `states`, what else each window is.
+pub fn detailed(stacks: &Stacks, states: bool) -> String {
     let occupied = stacks.occupied();
     if occupied.is_empty() {
         return brief(stacks);
@@ -62,24 +95,22 @@ pub fn detailed(stacks: &Stacks) -> String {
         } else {
             text.push(';');
         }
-        text.push_str(&format!(
-            " position {}, {}",
-            slot_to_human(i % STACK_SIZE),
-            window_name(id)
-        ));
+        text.push(' ');
+        text.push_str(&entry(i, id, states));
     }
     text.push('.');
     text
 }
 
-/// The current stack and each window hidden in it, with its position and title.
-pub fn current(stacks: &Stacks) -> String {
+/// The current stack and each window hidden in it, with its position and title —
+/// and with `states`, what else each window is.
+pub fn current(stacks: &Stacks, states: bool) -> String {
     let stack = stacks.current_stack();
     let positions: Vec<String> = stacks
         .occupied()
         .into_iter()
         .filter(|(i, _)| i / STACK_SIZE + 1 == stack)
-        .map(|(i, id)| format!("position {}, {}", slot_to_human(i % STACK_SIZE), window_name(id)))
+        .map(|(i, id)| entry(i, id, states))
         .collect();
     if positions.is_empty() {
         return format!("Stack {stack}: nothing hidden.");
@@ -125,10 +156,10 @@ mod tests {
         let mut s = stacks_with(&[0, 9, 11]);
         s.shift = STACK_SIZE; // viewing stack 2
         assert_eq!(
-            detailed(&s),
+            detailed(&s, false),
             "3 windows hidden in 2 stacks. Current stack 2. \
-             Stack 1: position 1, untitled window; position 0, untitled window. \
-             Stack 2: position 2, untitled window."
+             Stack 1: 1, untitled window; 0, untitled window. \
+             Stack 2: 2, untitled window."
         );
     }
 
@@ -136,17 +167,59 @@ mod tests {
     fn current_names_only_the_current_stacks_positions() {
         let mut s = stacks_with(&[0, 9, 11]);
         assert_eq!(
-            current(&s),
-            "Stack 1: position 1, untitled window; position 0, untitled window."
+            current(&s, false),
+            "Stack 1: 1, untitled window; 0, untitled window."
         );
         s.shift = STACK_SIZE;
-        assert_eq!(current(&s), "Stack 2: position 2, untitled window.");
+        assert_eq!(current(&s, false), "Stack 2: 2, untitled window.");
         s.shift = 2 * STACK_SIZE;
-        assert_eq!(current(&s), "Stack 3: nothing hidden.");
+        assert_eq!(current(&s, false), "Stack 3: nothing hidden.");
+    }
+
+    #[test]
+    fn states_add_nothing_for_a_window_in_no_special_state() {
+        // The fake ids aren't real windows, so none of the states apply.
+        let s = stacks_with(&[0]);
+        assert_eq!(current(&s, true), "Stack 1: 1, untitled window.");
+    }
+
+    #[test]
+    fn states_follow_the_title() {
+        // A real window this process owns, made transparent and minimized.
+        use windows::core::w;
+        use windows::Win32::UI::WindowsAndMessaging::*;
+        let hwnd = unsafe {
+            CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                w!("STATIC"),
+                w!("Probe"),
+                WS_OVERLAPPEDWINDOW,
+                0,
+                0,
+                100,
+                100,
+                None,
+                None,
+                None,
+                None,
+            )
+        }
+        .expect("create window");
+        assert!(window::make_transparent(hwnd));
+        unsafe {
+            let _ = ShowWindow(hwnd, SW_MINIMIZE);
+        }
+        let mut s = Stacks::new();
+        s.set(3, window::to_id(hwnd));
+        assert_eq!(current(&s, true), "Stack 1: 4, Probe, transparent, minimized.");
+        assert_eq!(current(&s, false), "Stack 1: 4, Probe.");
+        unsafe {
+            let _ = DestroyWindow(hwnd);
+        }
     }
 
     #[test]
     fn detailed_falls_back_to_brief_when_empty() {
-        assert_eq!(detailed(&Stacks::new()), "No windows hidden");
+        assert_eq!(detailed(&Stacks::new(), true), "No windows hidden");
     }
 }

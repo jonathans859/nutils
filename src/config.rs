@@ -295,6 +295,11 @@ pub struct Settings {
     /// and title; `false` = it announces only the counts.
     #[serde(default)]
     pub detailed_status: bool,
+    /// `true` = wherever hidden windows are listed one by one (detailed status,
+    /// the stack status hotkey), also say whether each is transparent, minimized,
+    /// maximized or not responding.
+    #[serde(default)]
+    pub window_states: bool,
     /// `true` = when a hotkey makes a window transparent, also compare the screen
     /// before and after, to catch windows that stay drawn anyway. Needs Screen
     /// Curtain off; with it on the check is skipped.
@@ -319,6 +324,7 @@ impl Default for Settings {
             stack_counter: true,
             feedback: FeedbackMode::Beeps,
             detailed_status: false,
+            window_states: false,
             visual_check: false,
             check_for_updates: true,
             update_channel: UpdateChannel::Stable,

@@ -1063,6 +1063,12 @@ fn main() {
         detail_cb.set_value(cfg.borrow().settings.detailed_status);
         gsizer.add(&detail_cb, 0, SizerFlag::All, 8);
 
+        let states_cb = CheckBox::builder(&general)
+            .with_label("&Window states: when hidden windows are listed, also say if each is transparent, minimized, maximized or not responding")
+            .build();
+        states_cb.set_value(cfg.borrow().settings.window_states);
+        gsizer.add(&states_cb, 0, SizerFlag::All, 8);
+
         let visual_cb = CheckBox::builder(&general)
             .with_label("&Visual check: confirm on screen that a window really became transparent (needs Screen Curtain off)")
             .build();
@@ -1343,6 +1349,7 @@ fn main() {
         let sc = stack_cb;
         let fbc = fb_choice;
         let dsc = detail_cb;
+        let wsc = states_cb;
         let vsc = visual_cb;
         let usc = updates_cb;
         let chc = channel_choice;
@@ -1381,6 +1388,7 @@ fn main() {
                 _ => FeedbackMode::Beeps,
             };
             save_cfg.borrow_mut().settings.detailed_status = dsc.get_value();
+            save_cfg.borrow_mut().settings.window_states = wsc.get_value();
             save_cfg.borrow_mut().settings.visual_check = vsc.get_value();
             save_cfg.borrow_mut().settings.check_for_updates = usc.get_value();
             save_cfg.borrow_mut().settings.update_channel = selected_channel(&chc);

@@ -79,6 +79,20 @@ pub fn clear_hidden_mark(hwnd: HWND) {
     }
 }
 
+pub fn is_minimized(hwnd: HWND) -> bool {
+    unsafe { IsIconic(hwnd).as_bool() }
+}
+
+pub fn is_maximized(hwnd: HWND) -> bool {
+    unsafe { IsZoomed(hwnd).as_bool() }
+}
+
+/// Whether Windows considers the window's app hung (not answering messages
+/// for several seconds) — the same test that makes Windows say "Not Responding".
+pub fn is_hung(hwnd: HWND) -> bool {
+    unsafe { IsHungAppWindow(hwnd).as_bool() }
+}
+
 pub fn show(hwnd: HWND) {
     clear_hidden_mark(hwnd);
     unsafe {

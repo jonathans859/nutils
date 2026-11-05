@@ -28,7 +28,9 @@ is a complete rewrite in Rust on the native Win32 API.
 - **Hidden-window status.** A hotkey tells you how many windows are hidden and in
   how many stacks. With *Detailed status* turned on, it also reads out every
   hidden window by stack, slot and title. Another hotkey reads out just the
-  windows in the stack you're on, with their positions and titles.
+  windows in the stack you're on, with their positions and titles. With
+  *Window states* turned on, both lists also say whether each window is
+  transparent, minimized, maximized or not responding.
 - **Tray menu.** Lists every hidden window, grouped by stack, under a submenu
   named for how many are hidden, so you can click one to bring it back.
 - **Rename a window** so you can tell apart windows that have the same title.
@@ -74,7 +76,7 @@ Choose **Settings...** from the tray menu. This opens a settings editor that
 works well with screen readers:
 
 - **General**: the feedback mode (beeps, speech or both), how stacks are
-  announced, detailed status, the visual check, whether to check for updates
+  announced, detailed status, window states, the visual check, whether to check for updates
   at startup, and the update channel: stable releases or development builds
   (with a button to check now).
 - **Keybindings**: every shortcut and what it does. All shortcuts share one

@@ -10,6 +10,12 @@ update dialog shows. Start a new release with a `## <version>` heading.
 - In the tray menu, the hidden windows' submenu is now named for how many are
   hidden, such as "7 windows hidden in 2 stacks", instead of a separate line
   above a submenu called "Hidden".
+- Lists of hidden windows now give just the number you press for each window,
+  such as "1, Notepad", instead of "position 1, Notepad".
+- A new setting, Window states, makes those lists also say whether each window
+  is transparent, minimized, maximized or not responding, such as "1, Notepad,
+  transparent, minimized". It's off by default; turn it on in Settings, on the
+  General tab.
 - The kill shortcut now defaults to Win+F4 again. Base modifier + F4 is also
   the "Below normal" priority key, so with the defaults the kill shortcut never
   worked: pressing it changed the priority instead. If you set up NUtils

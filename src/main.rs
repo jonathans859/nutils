@@ -275,7 +275,9 @@ impl App {
             HK_STACKUP => self.stack_shift(true),
             HK_STACKDOWN => self.stack_shift(false),
             HK_STATUS => self.announce_status(),
-            HK_STACKSTATUS => self.fb.status(&status::current(&self.stacks)),
+            HK_STACKSTATUS => self
+                .fb
+                .status(&status::current(&self.stacks, self.cfg.settings.window_states)),
             HK_CHTITLE => self.change_title(),
             HK_MANAGEAPP => self.manage_active_app(),
             HK_UNMANAGEAPP => self.unmanage_active_app(),
@@ -423,7 +425,7 @@ impl App {
     /// `detailed_status` is on, each window's stack, position and title.
     fn announce_status(&mut self) {
         let text = if self.cfg.settings.detailed_status {
-            status::detailed(&self.stacks)
+            status::detailed(&self.stacks, self.cfg.settings.window_states)
         } else {
             status::brief(&self.stacks)
         };
