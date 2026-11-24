@@ -438,9 +438,10 @@ impl App {
         } else {
             self.stacks.shift = self.stacks.shift.saturating_sub(STACK_SIZE);
         }
-        let stack_1based = self.stacks.shift / STACK_SIZE + 1;
+        let stack_1based = self.stacks.current_stack();
+        let hidden = self.stacks.current_count();
         let counter = self.cfg.settings.stack_counter;
-        self.fb.stack(stack_1based, counter);
+        self.fb.stack(stack_1based, hidden, counter);
     }
 
     // ---- dialogs ----------------------------------------------------------

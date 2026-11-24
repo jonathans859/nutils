@@ -162,11 +162,14 @@ impl Feedback {
             sound::priority_error();
         }
     }
-    pub fn stack(&mut self, stack: usize, use_counter: bool) {
-        self.speak(&format!("Stack {stack}"));
+    /// `hidden` is how many hidden windows the stack holds: spoken in brackets,
+    /// and an empty stack's counter beeps are lower pitched.
+    pub fn stack(&mut self, stack: usize, hidden: usize, use_counter: bool) {
+        self.speak(&format!("Stack {stack} ({hidden})"));
         if self.should_beep() {
             if use_counter {
-                sound::stack_beeps(stack); // announce the number by beeping N times
+                // announce the number by beeping N times
+                sound::stack_beeps(stack, hidden == 0);
             } else if !sound::play_number(stack) {
                 // Counter off and no number sound pack: a single cue, not N beeps.
                 sound::notify();

@@ -136,6 +136,13 @@ impl Stacks {
         self.shift / STACK_SIZE + 1
     }
 
+    /// How many hidden windows the current stack holds.
+    pub fn current_count(&self) -> usize {
+        (self.shift..self.shift + STACK_SIZE)
+            .filter(|&i| self.get(i) != 0)
+            .count()
+    }
+
     /// Take back windows NUtils hid but has lost track of (`state.toml` deleted
     /// or reset): a hidden window still carrying the mark [`window::hide`] puts
     /// on it goes back into its old slot, or the first free one if that is taken.

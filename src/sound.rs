@@ -213,10 +213,12 @@ pub fn priority_error() {
 }
 
 /// Announce the current stack (1-based) by playing the stack cue / beeping N times.
-pub fn stack_beeps(stack: usize) {
+/// An `empty` stack beeps a fifth lower (`stackEmpty.wav` in a sound pack).
+pub fn stack_beeps(stack: usize, empty: bool) {
+    let (name, freq) = if empty { ("stackEmpty", 440) } else { ("stack", 659) };
     for _ in 0..stack {
-        if !play_wav("stack", false) {
-            tone(659, 60);
+        if !play_wav(name, false) {
+            tone(freq, 60);
         }
     }
 }
