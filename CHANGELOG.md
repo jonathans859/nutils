@@ -31,6 +31,10 @@ update dialog shows. Start a new release with a `## <version>` heading.
 - The kill hotkey now tells you when the app wasn't killed: for example, an
   app running as administrator, which NUtils isn't allowed to close. Before,
   nothing happened. "Killed" is now only said once the app has really closed.
+- The stack counter beeps and every cue with more than one tone now keep an
+  even rhythm. Before, the gaps between the beeps varied, so they sounded out
+  of step. This also applies to sound packs' `stack.wav`, `stackEmpty.wav` and
+  number files.
 
 ## 4.1.0
 
